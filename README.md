@@ -2,69 +2,76 @@
 
 > **From grocery to meal, simplified.**
 
-A lightweight FastAPI + SQLite web app for Kerala-style family meal & grocery planning.
+Offline-first PWA for Kerala-style family grocery + meal planning. Pure static — no backend, no build step, no database server. All state lives in the device's `localStorage`, so data survives reloads and persists when wrapped as a mobile app.
 
 ## Features
 
-- **Grocery Planner** — monthly reusable checklist, category-based (Vegetables, Staples, Non-Veg, Dairy, Oils, Spices, Snacks, Seasonal Fruits), quantity tracking, one-click monthly reset.
-- **Meal Planner (Kerala Style)** — 7-day auto-generator honoring the spec rules: 80% simple meals, avoid repetition of the last 2 picks, seeded with Idli/Dosa/Puttu+Kadala/Sambar-Thoran/Fish Curry/Moru/Dal/Chapati etc.
-- **Smart Reminders** — daily milk, weekly vegetables, and custom reminders with toggle/delete.
-
-## Stack
-
-| Layer    | Tech                         |
-|----------|------------------------------|
-| Backend  | FastAPI (Python 3.10+)       |
-| DB       | SQLite (auto-seeded on boot) |
-| Frontend | Vanilla JS + Jinja2 (zero build step) |
+- **Grocery Planner** — 8 categories, 49 items pre-seeded per spec (Vegetables, Staples, Non-Veg, Dairy, Oils, Spices, Snacks, Seasonal Fruits), quantity tracking, one-click monthly reset.
+- **Meal Planner (Kerala Style)** — 7-day generator honoring spec rules: 80% simple meals, avoids repeating the last 2 picks per slot.
+- **Smart Reminders** — daily / weekly / custom, with real OS notifications via the Web Notification API.
+- **Installable PWA** — "Add to Home Screen" on Android/iOS, works offline via service worker.
 
 ## Run locally
 
+Any static server works. Pick one:
+
 ```bash
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+# Python
+python -m http.server 8000
+
+# Node
+npx serve .
 ```
 
 Open http://127.0.0.1:8000
+
+## Deploy to GitHub Pages (free, no card)
+
+1. Push this folder to a new GitHub repo, e.g. `Pachaka-Lokam`.
+2. Repo → **Settings** → **Pages** → Source: **Deploy from a branch** → Branch: `main` / `root` → Save.
+3. Live at `https://<your-user>.github.io/Pachaka-Lokam/` in ~1 minute.
+
+That's it — same flow as ProfitPilot's frontend.
 
 ## Project layout
 
 ```
 pachaka-lokam/
-├── app/
-│   ├── main.py              # FastAPI entry + lifespan seeding
-│   ├── db.py                # Schema + seed data from spec
-│   ├── routers/
-│   │   ├── grocery.py       # CRUD + monthly reset
-│   │   ├── meals.py         # Plan generator + persistence
-│   │   └── reminders.py     # Reminder CRUD + toggle
-│   ├── static/
-│   │   ├── css/app.css      # Logo-palette theming
-│   │   ├── js/app.js        # SPA controller
-│   │   └── img/logo.png
-│   └── templates/index.html
-├── data/                    # SQLite DB lands here (gitignored)
-├── requirements.txt
-└── README.md
+├── index.html              # App shell
+├── app.css                 # Logo-palette theme
+├── app.js                  # Controller + state + notifications
+├── data.js                 # Seed data (grocery, meals, reminders)
+├── manifest.webmanifest    # PWA manifest
+├── sw.js                   # Service worker (offline cache)
+└── assets/logo.png
 ```
 
-## API quick reference
+## Storage model
 
-| Method | Path                         | Purpose                     |
-|--------|------------------------------|-----------------------------|
-| GET    | `/api/grocery/grouped`       | List items grouped by category |
-| POST   | `/api/grocery`               | Add item                    |
-| PATCH  | `/api/grocery/{id}`          | Update qty / checked        |
-| POST   | `/api/grocery/reset-month`   | Monthly reset               |
-| GET    | `/api/meals/catalog`         | Meal catalog                |
-| POST   | `/api/meals/generate`        | Generate N-day plan         |
-| GET    | `/api/meals/plan`            | Fetch persisted plan        |
-| GET/POST/PATCH/DELETE | `/api/reminders` | Reminder CRUD             |
+Everything lives under one `localStorage` key: `pl_state_v1`.
 
-## Roadmap (from spec §6)
+```js
+{
+  grocery:  [{ id, name, category, qty, checked, seasonal }],
+  plans:    { "YYYY-MM-DD": { breakfast, lunch, dinner } },
+  reminders:[{ id, title, frequency, time, active }],
+  notifiedDates: { "<remId>": "YYYY-MM-DD-HH:MM" }
+}
+```
 
-- AI meal suggestions (pluggable LLM endpoint)
+To reset entirely: DevTools → Application → Local Storage → delete `pl_state_v1`.
+
+## Mobile wrap (future)
+
+When you wrap this in Capacitor for Android:
+
+- `localStorage` maps to the WebView's persistent storage — no data migration needed.
+- Upgrade reminders to `@capacitor/local-notifications` for true background alarms (the current `setInterval` only fires while the tab is open; it's the best the pure-web path allows).
+- Service worker becomes optional since Capacitor bundles assets natively.
+
+## Roadmap (spec §6)
+
+- AI meal suggestions (LLM-backed, optional API key in settings)
 - Expense tracking
-- Multi-user support (auth + scoping)
-- Push notifications for reminders
+- Multi-user sync (introduce Supabase when needed)
+- Background notifications via Capacitor

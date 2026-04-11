@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#1fa34a" />
+<title>Pachaka Lokam — From grocery to meal, simplified.</title>
+<link rel="icon" href="assets/logo.png" />
+<link rel="apple-touch-icon" href="assets/logo.png" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="stylesheet" href="app.css" />
+</head>
+<body>
+<header class="hero">
+  <img src="assets/logo.png" alt="Pachaka Lokam" class="logo" />
+  <div>
+    <h1>Pachaka Lokam</h1>
+    <p class="tag">From grocery to meal, simplified.</p>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="grocery">🛒 Grocery</button>
+  <button class="tab" data-tab="meals">🍲 Meal Plan</button>
+  <button class="tab" data-tab="reminders">🔔 Reminders</button>
+</nav>
+
+<main>
+  <section id="grocery" class="panel active">
+    <div class="toolbar">
+      <h2>Monthly Grocery Checklist</h2>
+      <button class="btn" id="btn-reset-month">Reset Month</button>
+    </div>
+    <div id="grocery-groups"></div>
+    <div class="add-row">
+      <input id="g-name" placeholder="Item name" />
+      <input id="g-cat" placeholder="Category" />
+      <button class="btn primary" id="btn-add-item">Add</button>
+    </div>
+  </section>
+
+  <section id="meals" class="panel">
+    <div class="toolbar">
+      <h2>Kerala-Style Meal Plan</h2>
+      <div class="row">
+        <input type="date" id="plan-start" />
+        <button class="btn primary" id="btn-generate">Generate 7-day plan</button>
+      </div>
+    </div>
+    <div id="plan-grid"></div>
+  </section>
+
+  <section id="reminders" class="panel">
+    <div class="toolbar">
+      <h2>Smart Reminders</h2>
+      <button class="btn" id="btn-enable-notif">Enable Notifications</button>
+    </div>
+    <div id="reminder-list"></div>
+    <div class="add-row">
+      <input id="r-title" placeholder="Reminder title" />
+      <select id="r-freq">
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="custom">Custom</option>
+      </select>
+      <input id="r-time" type="time" />
+      <button class="btn primary" id="btn-add-rem">Add</button>
+    </div>
+  </section>
+</main>
+
+<footer>Pachaka Lokam · v0.2 · Offline-first PWA</footer>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

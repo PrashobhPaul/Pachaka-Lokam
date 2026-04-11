@@ -1,0 +1,97 @@
+:root {
+  --green: #1fa34a; --orange: #e8541c; --blue: #1d8fd6; --yellow: #f2b705;
+  --bg: #fffdf7; --ink: #1a1a1a; --muted: #6b7280;
+  --card: #fff; --border: #e8e8d8;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; }
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg); color: var(--ink);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.hero {
+  display: flex; align-items: center; gap: 16px;
+  padding: 20px 24px; padding-top: calc(20px + env(safe-area-inset-top));
+  background: linear-gradient(135deg, #fff8e8 0%, #e8f7ec 100%);
+  border-bottom: 3px solid var(--green);
+}
+.logo { height: 60px; width: 60px; object-fit: contain; }
+.hero h1 { margin: 0; color: var(--orange); font-size: 24px; letter-spacing: -0.5px; }
+.tag { margin: 2px 0 0; color: var(--green); font-style: italic; font-weight: 500; font-size: 13px; }
+
+.tabs {
+  display: flex; gap: 4px; padding: 0 16px;
+  background: var(--card); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 10; overflow-x: auto;
+}
+.tab {
+  background: transparent; border: none; padding: 14px 16px;
+  font-size: 14px; cursor: pointer; color: var(--muted);
+  border-bottom: 3px solid transparent; font-weight: 600; white-space: nowrap;
+}
+.tab.active { color: var(--green); border-bottom-color: var(--green); }
+
+main { padding: 20px 16px 40px; max-width: 1100px; margin: 0 auto; }
+.panel { display: none; }
+.panel.active { display: block; }
+
+.toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+.row { display: flex; gap: 8px; }
+h2 { margin: 0; font-size: 18px; }
+
+.btn {
+  background: #fff; border: 1.5px solid var(--border);
+  padding: 9px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px;
+}
+.btn.primary { background: var(--green); color: #fff; border-color: var(--green); }
+.btn:active { transform: scale(0.97); }
+
+input, select {
+  padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+  font-size: 14px; background: #fff; font-family: inherit;
+}
+
+.category {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px; margin-bottom: 12px;
+}
+.category h3 {
+  margin: 0 0 10px; color: var(--orange); font-size: 13px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.items { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+.item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  background: #faf9f2; border-radius: 8px; font-size: 14px; cursor: pointer;
+}
+.item input[type=checkbox] { accent-color: var(--green); width: 18px; height: 18px; }
+.item.checked { opacity: 0.5; text-decoration: line-through; }
+.item .qty { width: 54px; padding: 3px 6px; font-size: 12px; }
+.item .name { flex: 1; }
+
+.add-row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.add-row input, .add-row select { flex: 1; min-width: 120px; }
+
+#plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.day-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px; border-left: 4px solid var(--blue);
+}
+.day-card h4 { margin: 0 0 10px; color: var(--blue); font-size: 14px; }
+.meal-row { padding: 6px 0; border-bottom: 1px dashed var(--border); font-size: 13px; }
+.meal-row:last-child { border-bottom: none; }
+.meal-row b { color: var(--orange); text-transform: capitalize; display: block; font-size: 11px; }
+
+#reminder-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.rem {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; gap: 10px;
+}
+.rem.off { opacity: 0.45; }
+.rem .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.rem .actions { display: flex; gap: 6px; }
+.rem .actions .btn { padding: 6px 10px; font-size: 12px; }
+
+footer { text-align: center; padding: 24px; color: var(--muted); font-size: 12px; }
