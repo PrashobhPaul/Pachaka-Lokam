@@ -154,7 +154,8 @@ function has(token, p) {
   for (const x of p) if (x.includes(t)) return true;
   return false;
 }
-function pickAll(list, p) { return list.filter(x => p.has(x)); }
+function pickAll(list, p)   { return list.filter(x => has(x, p)); }
+function pickFirst(list, p) { return list.find(x => has(x, p)); }
 
 // ============== MEAL ENGINE ==============
 function tryCook(meal, p, recent) {
