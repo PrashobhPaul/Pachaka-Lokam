@@ -37,8 +37,9 @@ main { padding: 20px 16px 40px; max-width: 1100px; margin: 0 auto; }
 .panel.active { display: block; }
 
 .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
-.row { display: flex; gap: 8px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 h2 { margin: 0; font-size: 18px; }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
 
 .btn {
   background: #fff; border: 1.5px solid var(--border);
@@ -52,6 +53,14 @@ input, select {
   font-size: 14px; background: #fff; font-family: inherit;
 }
 
+.switch {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--muted); cursor: pointer;
+  background: #fff; border: 1.5px solid var(--border);
+  padding: 7px 12px; border-radius: 8px; font-weight: 600;
+}
+.switch input { accent-color: var(--green); }
+
 .category {
   background: var(--card); border: 1px solid var(--border); border-radius: 12px;
   padding: 14px; margin-bottom: 12px;
@@ -59,21 +68,31 @@ input, select {
 .category h3 {
   margin: 0 0 10px; color: var(--orange); font-size: 13px;
   text-transform: uppercase; letter-spacing: 0.5px;
+  display: flex; justify-content: space-between; align-items: center;
 }
-.items { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+.category h3 .count { color: var(--muted); font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.items { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; }
 .item {
-  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  display: flex; align-items: center; gap: 6px; padding: 8px 10px;
   background: #faf9f2; border-radius: 8px; font-size: 14px; cursor: pointer;
+  border-left: 3px solid transparent;
 }
+.item.stocked { border-left-color: var(--green); background: #f0faf3; }
 .item input[type=checkbox] { accent-color: var(--green); width: 18px; height: 18px; }
-.item.checked { opacity: 0.5; text-decoration: line-through; }
-.item .qty { width: 54px; padding: 3px 6px; font-size: 12px; }
+.item.checked { opacity: 0.55; text-decoration: line-through; }
 .item .name { flex: 1; }
+.item .qty { width: 58px; padding: 3px 6px; font-size: 12px; }
+.item .unit { font-size: 11px; color: var(--muted); min-width: 22px; text-align: left; font-weight: 600; }
 
 .add-row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .add-row input, .add-row select { flex: 1; min-width: 120px; }
 
-#plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.shortfall {
+  display: none; background: #fff8e8; border: 1px solid var(--yellow);
+  padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; font-size: 13px;
+}
+
+#plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
 .day-card {
   background: var(--card); border: 1px solid var(--border); border-radius: 12px;
   padding: 14px; border-left: 4px solid var(--blue);
@@ -82,6 +101,10 @@ input, select {
 .meal-row { padding: 6px 0; border-bottom: 1px dashed var(--border); font-size: 13px; }
 .meal-row:last-child { border-bottom: none; }
 .meal-row b { color: var(--orange); text-transform: capitalize; display: block; font-size: 11px; }
+.miss {
+  display: inline-block; margin-left: 6px; font-size: 11px;
+  color: #c0392b; background: #fde8e4; padding: 1px 6px; border-radius: 4px;
+}
 
 #reminder-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .rem {

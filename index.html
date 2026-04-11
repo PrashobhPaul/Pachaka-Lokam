@@ -28,13 +28,22 @@
 <main>
   <section id="grocery" class="panel active">
     <div class="toolbar">
-      <h2>Monthly Grocery Checklist</h2>
+      <h2>Monthly Grocery &amp; Pantry</h2>
       <button class="btn" id="btn-reset-month">Reset Month</button>
     </div>
+    <p class="hint">Enter a quantity to mark an item as <b>in stock</b>. The meal planner uses this to suggest recipes you can actually cook today.</p>
     <div id="grocery-groups"></div>
     <div class="add-row">
       <input id="g-name" placeholder="Item name" />
       <input id="g-cat" placeholder="Category" />
+      <select id="g-unit">
+        <option value="nos">nos</option>
+        <option value="kg">kg</option>
+        <option value="g">g</option>
+        <option value="L">L</option>
+        <option value="ml">ml</option>
+        <option value="pkt">pkt</option>
+      </select>
       <button class="btn primary" id="btn-add-item">Add</button>
     </div>
   </section>
@@ -43,10 +52,12 @@
     <div class="toolbar">
       <h2>Kerala-Style Meal Plan</h2>
       <div class="row">
+        <label class="switch"><input type="checkbox" id="pantry-mode" /> Pantry-aware</label>
         <input type="date" id="plan-start" />
         <button class="btn primary" id="btn-generate">Generate 7-day plan</button>
       </div>
     </div>
+    <div id="shortfall" class="shortfall"></div>
     <div id="plan-grid"></div>
   </section>
 
@@ -69,7 +80,7 @@
   </section>
 </main>
 
-<footer>Pachaka Lokam · v0.2 · Offline-first PWA</footer>
+<footer>Pachaka Lokam · v0.3 · Pantry-aware PWA</footer>
 <script src="data.js"></script>
 <script src="app.js"></script>
 </body>
