@@ -1,0 +1,11 @@
+Make this changes to make it as a mobile app:-
+
+When you wrap it in Capacitor, swap the checkReminders() function for @capacitor/local-notifications:
+  
+import { LocalNotifications } from '@capacitor/local-notifications';
+await LocalNotifications.schedule({
+  notifications: [{
+    id: hashOf(r.id), title: "Pachaka Lokam", body: r.title,
+    schedule: { on: { hour: 7, minute: 0 }, repeats: true }
+  }]
+});
