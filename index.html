@@ -20,44 +20,37 @@
 </header>
 
 <nav class="tabs">
-  <button class="tab active" data-tab="grocery">🛒 Grocery</button>
+  <button class="tab active" data-tab="kitchen">🍳 Kitchen</button>
+  <button class="tab" data-tab="grocery">🛒 Grocery</button>
   <button class="tab" data-tab="meals">🍲 Meal Plan</button>
   <button class="tab" data-tab="reminders">🔔 Reminders</button>
 </nav>
 
 <main>
-  <section id="grocery" class="panel active">
+  <section id="kitchen" class="panel active">
     <div class="toolbar">
-      <h2>Monthly Grocery &amp; Pantry</h2>
+      <h2>What's in my Kitchen</h2>
       <button class="btn" id="btn-reset-month">Reset Month</button>
     </div>
-    <p class="hint">Enter a quantity to mark an item as <b>in stock</b>. The meal planner uses this to suggest recipes you can actually cook today.</p>
-    <div id="grocery-groups"></div>
-    <div class="add-row">
-      <input id="g-name" placeholder="Item name" />
-      <input id="g-cat" placeholder="Category" />
-      <select id="g-unit">
-        <option value="nos">nos</option>
-        <option value="kg">kg</option>
-        <option value="g">g</option>
-        <option value="L">L</option>
-        <option value="ml">ml</option>
-        <option value="pkt">pkt</option>
-      </select>
-      <button class="btn primary" id="btn-add-item">Add</button>
-    </div>
+    <p class="hint">Update quantities as you use things. Tap <b>Out</b> when something runs out — it'll move to the Grocery list automatically.</p>
+    <div id="kitchen-groups"></div>
+  </section>
+
+  <section id="grocery" class="panel">
+    <div class="toolbar"><h2>Shopping List</h2></div>
+    <p class="hint">Tap <b>Bought</b> after purchase to send the item back to your kitchen with a fresh quantity.</p>
+    <div id="grocery-list"></div>
   </section>
 
   <section id="meals" class="panel">
     <div class="toolbar">
-      <h2>Kerala-Style Meal Plan</h2>
+      <h2>Kerala Meal Plan</h2>
       <div class="row">
-        <label class="switch"><input type="checkbox" id="pantry-mode" /> Pantry-aware</label>
         <input type="date" id="plan-start" />
         <button class="btn primary" id="btn-generate">Generate 7-day plan</button>
       </div>
     </div>
-    <div id="shortfall" class="shortfall"></div>
+    <p class="hint" id="plan-note">Suggestions are built strictly from what's in your Kitchen.</p>
     <div id="plan-grid"></div>
   </section>
 
@@ -80,7 +73,7 @@
   </section>
 </main>
 
-<footer>Pachaka Lokam · v0.3 · Pantry-aware PWA</footer>
+<footer>Pachaka Lokam · v0.4 · Kerala edition</footer>
 <script src="data.js"></script>
 <script src="app.js"></script>
 </body>
