@@ -4,76 +4,77 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <meta name="theme-color" content="#1fa34a" />
-<title>Pachaka Lokam — From grocery to meal, simplified.</title>
+<title>Pachaka Lokam</title>
 <link rel="icon" href="assets/logo.png" />
-<link rel="apple-touch-icon" href="assets/logo.png" />
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="stylesheet" href="app.css" />
 </head>
 <body>
 <header class="hero">
-  <img src="assets/logo.png" alt="Pachaka Lokam" class="logo" />
-  <div>
-    <h1>Pachaka Lokam</h1>
-    <p class="tag">From grocery to meal, simplified.</p>
-  </div>
+  <img src="assets/logo.png" class="logo" />
+  <div><h1>Pachaka Lokam</h1><p class="tag">From grocery to meal, simplified.</p></div>
 </header>
-
 <nav class="tabs">
   <button class="tab active" data-tab="kitchen">🍳 Kitchen</button>
   <button class="tab" data-tab="grocery">🛒 Grocery</button>
   <button class="tab" data-tab="meals">🍲 Meal Plan</button>
   <button class="tab" data-tab="reminders">🔔 Reminders</button>
 </nav>
-
 <main>
   <section id="kitchen" class="panel active">
-    <div class="toolbar">
-      <h2>What's in my Kitchen</h2>
-      <button class="btn" id="btn-reset-month">Reset Month</button>
-    </div>
-    <p class="hint">Update quantities as you use things. Tap <b>Out</b> when something runs out — it'll move to the Grocery list automatically.</p>
+    <div class="toolbar"><h2>What's in my Kitchen</h2><button class="btn" id="btn-reset-month">Reset Month</button></div>
+    <p class="hint">Update quantities as you use things. Tap <b>Out</b> to move to Grocery.</p>
     <div id="kitchen-groups"></div>
   </section>
 
   <section id="grocery" class="panel">
     <div class="toolbar"><h2>Shopping List</h2></div>
-    <p class="hint">Tap <b>Bought</b> after purchase to send the item back to your kitchen with a fresh quantity.</p>
+    <p class="hint">Tap <b>Bought</b> to return items to Kitchen.</p>
     <div id="grocery-list"></div>
   </section>
 
   <section id="meals" class="panel">
+    <div id="template-banner" class="banner">
+      <div><b>You have a saved weekly plan.</b><div class="meta">Apply it to this week — items missing in kitchen will be auto-substituted.</div></div>
+      <div class="row"><button class="btn primary" id="btn-apply-template">Apply</button>
+      <button class="btn" id="btn-dismiss-template">Not this week</button></div>
+    </div>
     <div class="toolbar">
       <h2>Kerala Meal Plan</h2>
       <div class="row">
+        <label class="switch">Drink:
+          <select id="bev-select"><option value="tea">Tea</option><option value="coffee">Coffee</option><option value="either">Either</option></select>
+        </label>
         <input type="date" id="plan-start" />
-        <button class="btn primary" id="btn-generate">Generate 7-day plan</button>
+        <button class="btn" id="btn-edit-toggle">Edit Plan</button>
+        <button class="btn primary" id="btn-generate">Generate 7 days</button>
       </div>
     </div>
-    <p class="hint" id="plan-note">Suggestions are built strictly from what's in your Kitchen.</p>
+    <p class="hint">Suggestions adapt to your kitchen. Partial matches show <b>needs: …</b>.</p>
     <div id="plan-grid"></div>
+    <div class="row" style="justify-content:flex-end; margin-top:12px">
+      <button class="btn" id="btn-save-template" style="display:none">💾 Save as Weekly Template</button>
+    </div>
+
+    <div id="missing-panel" class="missing-panel" style="display:none">
+      <div class="toolbar"><h3>Missing for this plan</h3><button class="btn xs primary" id="btn-approve-all">Approve all → Grocery</button></div>
+      <p class="hint">Approve items to add them to your Grocery list. Dismiss if not needed.</p>
+      <div id="missing-list" class="chips"></div>
+    </div>
   </section>
 
   <section id="reminders" class="panel">
-    <div class="toolbar">
-      <h2>Smart Reminders</h2>
-      <button class="btn" id="btn-enable-notif">Enable Notifications</button>
-    </div>
+    <div class="toolbar"><h2>Smart Reminders</h2><button class="btn" id="btn-enable-notif">Enable Notifications</button></div>
     <div id="reminder-list"></div>
     <div class="add-row">
       <input id="r-title" placeholder="Reminder title" />
-      <select id="r-freq">
-        <option value="daily">Daily</option>
-        <option value="weekly">Weekly</option>
-        <option value="custom">Custom</option>
-      </select>
+      <select id="r-freq"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="custom">Custom</option></select>
       <input id="r-time" type="time" />
       <button class="btn primary" id="btn-add-rem">Add</button>
     </div>
   </section>
 </main>
-
-<footer>Pachaka Lokam · v0.4 · Kerala edition</footer>
+<footer>Pachaka Lokam · v0.5 · Kerala edition</footer>
 <script src="data.js"></script>
 <script src="app.js"></script>
 </body>

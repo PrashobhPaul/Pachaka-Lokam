@@ -1,34 +1,35 @@
-/* Pachaka Lokam v0.4 — Kitchen + Grocery split, strict pantry meal engine. */
-
-const STORAGE_KEY = "pl_state_v3";
+/* Pachaka Lokam v0.5 */
+const STORAGE_KEY = "pl_state_v4";
 const uid = () => Math.random().toString(36).slice(2, 10);
+const cap = s => s[0].toUpperCase() + s.slice(1);
+const isoWeek = d => { const x=new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate()+4-(x.getDay()||7));
+  const y=new Date(x.getFullYear(),0,1); return `${x.getFullYear()}-W${String(Math.ceil(((x-y)/86400000+1)/7)).padStart(2,"0")}`; };
 
-// ============== STORE ==============
 const Store = {
   state: null,
   load() {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) { try { this.state = JSON.parse(raw); return; } catch {} }
-    ["pl_state_v1","pl_state_v2"].forEach(k => localStorage.removeItem(k));
+    if (raw) { try { this.state = JSON.parse(raw); this.migrate(); return; } catch {} }
+    ["pl_state_v1","pl_state_v2","pl_state_v3"].forEach(k => localStorage.removeItem(k));
     const items = [];
     GROCERY_SEED.forEach(g => {
       const seasonal = g.category.includes("Seasonal");
-      g.items.forEach(([name, u]) => items.push({
-        id: uid(), name, category: g.category,
-        unit: u.unit, qty: 0, step: u.step, defaultQty: u.defaultQty,
-        needsBuy: false, seasonal,
-      }));
+      g.items.forEach(([name, u]) => items.push({ id: uid(), name, category: g.category,
+        unit: u.unit, qty: 0, step: u.step, defaultQty: u.defaultQty, needsBuy: false, seasonal }));
     });
-    this.state = {
-      items, plans: {}, reminders: REMINDER_SEED.map(r => ({ id: uid(), ...r })),
-      notifiedDates: {},
-    };
+    this.state = { items, plans: {}, reminders: REMINDER_SEED.map(r => ({ id: uid(), ...r })),
+      notifiedDates: {}, settings: { beverage: "tea" }, template: null, templateDismissedWeek: null };
     this.save();
+  },
+  migrate() {
+    this.state.settings ||= { beverage: "tea" };
+    this.state.settings.beverage ||= "tea";
+    this.state.template ||= null;
+    this.state.templateDismissedWeek ||= null;
   },
   save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state)); },
 };
 
-// ============== TABS ==============
 document.querySelectorAll(".tab").forEach(t => {
   t.onclick = () => {
     document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
@@ -37,284 +38,347 @@ document.querySelectorAll(".tab").forEach(t => {
     document.getElementById(t.dataset.tab).classList.add("active");
     if (t.dataset.tab === "grocery") renderGrocery();
     if (t.dataset.tab === "kitchen") renderKitchen();
+    if (t.dataset.tab === "meals") renderMealsTab();
   };
 });
 
-// ============== KITCHEN TAB ==============
+// ---------- Kitchen ----------
 function renderKitchen() {
-  const root = document.getElementById("kitchen-groups");
-  root.innerHTML = "";
+  const root = document.getElementById("kitchen-groups"); root.innerHTML = "";
   const groups = {};
   Store.state.items.forEach(it => { (groups[it.category] ||= []).push(it); });
-
   Object.entries(groups).forEach(([cat, items]) => {
-    const stocked = items.filter(i => i.qty > 0);
-    const empty   = items.filter(i => i.qty === 0);
-    const div = document.createElement("div");
-    div.className = "category";
+    const stocked = items.filter(i => i.qty > 0), empty = items.filter(i => i.qty === 0);
+    const div = document.createElement("div"); div.className = "category";
     div.innerHTML = `<h3>${cat} <span class="count">${stocked.length}/${items.length} stocked</span></h3>
       <div class="items stocked-grid"></div>
       ${empty.length ? `<details><summary>Not in kitchen (${empty.length})</summary><div class="items empty-grid"></div></details>` : ""}`;
-    const sBox = div.querySelector(".stocked-grid");
-    const eBox = div.querySelector(".empty-grid");
-
+    const sBox = div.querySelector(".stocked-grid"), eBox = div.querySelector(".empty-grid");
     stocked.forEach(it => {
-      const el = document.createElement("div");
-      el.className = "item stocked";
+      const el = document.createElement("div"); el.className = "item stocked";
       el.innerHTML = `<span class="name">${it.name}</span>
         <input type="number" class="qty" value="${it.qty}" min="0" step="${it.step}" />
-        <span class="unit">${it.unit}</span>
-        <button class="btn xs" title="Used up">Out</button>`;
+        <span class="unit">${it.unit}</span><button class="btn xs">Out</button>`;
       const [, qty, , out] = el.children;
-      qty.onchange = () => {
-        const v = parseFloat(qty.value) || 0;
-        it.qty = v;
-        if (v === 0) { it.needsBuy = true; }
-        Store.save(); renderKitchen();
-      };
-      out.onclick = () => {
-        it.qty = 0; it.needsBuy = true;
-        Store.save(); renderKitchen();
-      };
+      qty.onchange = () => { const v=parseFloat(qty.value)||0; it.qty=v; if(v===0) it.needsBuy=true; Store.save(); renderKitchen(); };
+      out.onclick = () => { it.qty=0; it.needsBuy=true; Store.save(); renderKitchen(); };
       sBox.appendChild(el);
     });
     if (eBox) empty.forEach(it => {
-      const el = document.createElement("div");
-      el.className = "item empty";
-      el.innerHTML = `<span class="name">${it.name}</span>
-        <span class="unit">${it.unit}</span>
-        <button class="btn xs primary">Got it</button>
-        <button class="btn xs">+ Buy</button>`;
+      const el = document.createElement("div"); el.className = "item empty";
+      el.innerHTML = `<span class="name">${it.name}</span><span class="unit">${it.unit}</span>
+        <button class="btn xs primary">Got it</button><button class="btn xs">+ Buy</button>`;
       const [, , got, buy] = el.children;
-      got.onclick = () => {
-        it.qty = it.defaultQty; it.needsBuy = false;
-        Store.save(); renderKitchen();
-      };
-      buy.onclick = () => {
-        it.needsBuy = true;
-        Store.save(); renderKitchen();
-      };
-      sBox.appendChild(el); // show in stocked grid grayed
-      // Actually append to empty box
+      got.onclick = () => { it.qty=it.defaultQty; it.needsBuy=false; Store.save(); renderKitchen(); };
+      buy.onclick = () => { it.needsBuy=true; Store.save(); renderKitchen(); };
       eBox.appendChild(el);
     });
     root.appendChild(div);
   });
 }
-
 document.getElementById("btn-reset-month").onclick = () => {
-  if (!confirm("Reset month? All quantities will be cleared and items moved to Grocery list.")) return;
-  Store.state.items.forEach(it => { it.qty = 0; it.needsBuy = true; });
+  if (!confirm("Reset month?")) return;
+  Store.state.items.forEach(it => { it.qty=0; it.needsBuy=true; });
   Store.save(); renderKitchen();
 };
 
-// ============== GROCERY TAB ==============
+// ---------- Grocery ----------
 function renderGrocery() {
-  const root = document.getElementById("grocery-list");
-  root.innerHTML = "";
+  const root = document.getElementById("grocery-list"); root.innerHTML = "";
   const toBuy = Store.state.items.filter(i => i.needsBuy);
-  if (!toBuy.length) {
-    root.innerHTML = `<p class="hint">Nothing to buy. Mark items as "Out" in Kitchen to add them here.</p>`;
-    return;
-  }
-  const groups = {};
-  toBuy.forEach(it => { (groups[it.category] ||= []).push(it); });
+  if (!toBuy.length) { root.innerHTML = `<p class="hint">Nothing to buy.</p>`; return; }
+  const groups = {}; toBuy.forEach(it => { (groups[it.category] ||= []).push(it); });
   Object.entries(groups).forEach(([cat, items]) => {
-    const div = document.createElement("div");
-    div.className = "category";
-    div.innerHTML = `<h3>${cat} <span class="count">${items.length} item${items.length>1?"s":""}</span></h3><div class="items"></div>`;
+    const div = document.createElement("div"); div.className = "category";
+    div.innerHTML = `<h3>${cat} <span class="count">${items.length}</span></h3><div class="items"></div>`;
     const box = div.querySelector(".items");
     items.forEach(it => {
-      const el = document.createElement("div");
-      el.className = "item";
+      const el = document.createElement("div"); el.className = "item";
       el.innerHTML = `<span class="name">${it.name}</span>
         <input type="number" class="qty" value="${it.defaultQty}" min="0" step="${it.step}" />
-        <span class="unit">${it.unit}</span>
-        <button class="btn xs primary">Bought</button>`;
+        <span class="unit">${it.unit}</span><button class="btn xs primary">Bought</button>`;
       const [, qty, , buy] = el.children;
-      buy.onclick = () => {
-        it.qty = parseFloat(qty.value) || it.defaultQty;
-        it.needsBuy = false;
-        Store.save(); renderGrocery();
-      };
+      buy.onclick = () => { it.qty=parseFloat(qty.value)||it.defaultQty; it.needsBuy=false; Store.save(); renderGrocery(); };
       box.appendChild(el);
     });
     root.appendChild(div);
   });
 }
 
-// ============== PANTRY MATCHING ==============
-function pantry() {
-  return new Set(Store.state.items.filter(i => i.qty > 0).map(i => i.name.toLowerCase()));
-}
+// ---------- Pantry matching ----------
+function pantry() { return new Set(Store.state.items.filter(i => i.qty > 0).map(i => i.name.toLowerCase())); }
 function has(token, p) {
   const t = token.toLowerCase();
-  if (t === "coconut")     return p.has("coconut");
+  if (t === "coconut") return p.has("coconut");
   if (t === "coconut oil") return p.has("coconut oil");
+  if (t === "coconut milk") return p.has("coconut milk");
   for (const x of p) if (x.includes(t)) return true;
   return false;
 }
 function pickAll(list, p)   { return list.filter(x => has(x, p)); }
 function pickFirst(list, p) { return list.find(x => has(x, p)); }
 
-// ============== MEAL ENGINE ==============
-function tryCook(meal, p, recent) {
-  if (recent.includes(meal.name)) return null;
-  for (const b of meal.base) if (!has(b, p)) return null;
-  const ctx = { matched: [] };
+// ---------- Meal engine ----------
+function resolveCurry(p) {
+  for (const cu of DINNER_CURRIES) {
+    if (!cu.needs.every(n => has(n, p))) continue;
+    if (cu.minFrom) { const m = pickAll(cu.minFrom, p);
+      if (m.length < cu.minCount) continue;
+      return cu.render ? cu.render(m.map(cap)) : cu.name; }
+    return cu.render ? cu.render([]) : cu.name;
+  }
+  return null;
+}
+function tryCook(meal, p, strict = true) {
+  const missing = meal.base.filter(b => !has(b, p));
+  if (strict && missing.length) return null;
+  const ctx = { matched: [], missing: [...missing] };
   if (meal.minFrom) {
     ctx.matched = pickAll(meal.minFrom, p);
-    if (ctx.matched.length < meal.minCount) return null;
-  }
-  if (meal.withSide) {
-    const hit = SIDE_DISHES.find(s => p.has(s.veg));
-    ctx.side = hit ? hit.name : null;
-  }
-  if (meal.withCurry) {
-    // Find first curry whose needs[] are stocked AND (if minFrom) enough optional veg in stock
-    let chosen = null;
-    for (const cu of DINNER_CURRIES) {
-      if (!cu.needs.every(n => has(n, p))) continue;
-      if (cu.minFrom) {
-        const m = pickAll(cu.minFrom, p);
-        if (m.length < cu.minCount) continue;
-        chosen = { name: cu.render ? cu.render(m.map(cap)) : cu.name };
-        break;
-      }
-      chosen = { name: cu.render ? cu.render([]) : cu.name };
-      break;
+    if (ctx.matched.length < meal.minCount) {
+      if (strict) return null;
+      ctx.missing.push(`${meal.minCount - ctx.matched.length} more ${meal.name.toLowerCase().includes("sambar")?"veg":"item(s)"}`);
     }
-    if (!chosen) return null;
-    ctx.curry = chosen.name;
   }
+  if (meal.withThoran) { const v = pickFirst(THORAN_VEG, p); ctx.thoran = v ? `${cap(v)} Thoran` : null; }
+  if (meal.withCurry) { const c = resolveCurry(p); if (!c) { if (strict) return null; ctx.missing.push("curry ingredients"); } ctx.curry = c || "Curry"; }
   const display = meal.render ? meal.render(ctx) : meal.name;
-  return { name: meal.name, display, simple: meal.simple, special: meal.special };
+  return { name: meal.name, type: meal.type, display, simple: meal.simple, special: meal.special, missing: ctx.missing };
 }
 
-function pickMeal(slot, p, recent) {
-  const pool = MEAL_RULES[slot];
-  const cookable = pool.map(m => tryCook(m, p, recent)).filter(Boolean);
+function pickMeal(slot, p, recent, bev) {
+  let pool = MEAL_RULES[slot];
+  if (slot === "tea") {
+    const milk = has("milk", p);
+    pool = pool.filter(m => !m.beverage || m.beverage === "either" || bev === "either" || m.beverage === bev);
+    pool = pool.filter(m => !m.blackFallback || !milk); // prefer milk version when milk available
+  }
+  // strict first
+  let cookable = pool.map(m => tryCook(m, p, true)).filter(Boolean).filter(c => !recent.includes(c.name));
+  if (!cookable.length) cookable = pool.map(m => tryCook(m, p, true)).filter(Boolean);
+  if (!cookable.length) {
+    // fallback: needs >=50% of base present
+    cookable = pool.map(m => {
+      const c = tryCook(m, p, false); if (!c) return null;
+      const total = m.base.length || 1;
+      const have = total - m.base.filter(b => !has(b, p)).length;
+      return (have / total) >= 0.5 ? c : null;
+    }).filter(Boolean);
+  }
   if (!cookable.length) return null;
-
-  // Lunch: 15% chance to pick a special if any cookable
   if (slot === "lunch") {
     const specials = cookable.filter(c => c.special);
-    if (specials.length && Math.random() < 0.15)
-      return specials[Math.floor(Math.random() * specials.length)];
+    if (specials.length && Math.random() < 0.15) return specials[Math.floor(Math.random()*specials.length)];
   }
   const normal = cookable.filter(c => !c.special);
-  const candidates = normal.length ? normal : cookable;
-  const simple = candidates.filter(c => c.simple);
-  const pool2  = (simple.length && Math.random() < 0.8) ? simple : candidates;
-  return pool2[Math.floor(Math.random() * pool2.length)];
+  const cand = normal.length ? normal : cookable;
+  const simple = cand.filter(c => c.simple);
+  const pool2 = (simple.length && Math.random() < 0.8) ? simple : cand;
+  return pool2[Math.floor(Math.random()*pool2.length)];
+}
+
+function allCookable(slot, p, bev) {
+  let pool = MEAL_RULES[slot];
+  if (slot === "tea") pool = pool.filter(m => !m.beverage || m.beverage === "either" || bev === "either" || m.beverage === bev);
+  return pool.map(m => tryCook(m, p, false)).filter(Boolean).map(c => ({
+    ...c, fullyCookable: c.missing.length === 0
+  })).sort((a,b) => a.missing.length - b.missing.length);
 }
 
 function generatePlan(startDate, days = 7) {
-  const p = pantry();
-  const plan = [];
-  const recent = { breakfast: [], lunch: [], tea: [], dinner: [] };
+  const p = pantry(), bev = Store.state.settings.beverage, plan = [];
+  const recent = { breakfast:[], lunch:[], tea:[], dinner:[] };
   for (let i = 0; i < days; i++) {
-    const d = new Date(startDate); d.setDate(d.getDate() + i);
-    const key = d.toISOString().slice(0, 10);
+    const d = new Date(startDate); d.setDate(d.getDate()+i);
+    const key = d.toISOString().slice(0,10); const meals = {};
+    for (const slot of ["breakfast","lunch","tea","dinner"]) {
+      const pick = pickMeal(slot, p, recent[slot].slice(-2), bev);
+      meals[slot] = pick ? { name: pick.name, display: pick.display, missing: pick.missing }
+                         : { name: null, display: "No suggestion — stock basics", missing: ["any ingredients"] };
+      if (pick) recent[slot].push(pick.name);
+    }
+    Store.state.plans[key] = meals; plan.push({ date: key, meals });
+  }
+  Store.save(); return plan;
+}
+
+// ---------- Meal tab rendering ----------
+let editMode = false;
+
+function renderMealsTab() {
+  document.getElementById("bev-select").value = Store.state.settings.beverage;
+  const bannerEl = document.getElementById("template-banner");
+  const tpl = Store.state.template;
+  const thisWeek = isoWeek(new Date());
+  const hasPlanThisWeek = Object.keys(Store.state.plans).some(d => isoWeek(d) === thisWeek);
+  if (tpl && !hasPlanThisWeek && Store.state.templateDismissedWeek !== thisWeek) {
+    bannerEl.style.display = "block";
+  } else bannerEl.style.display = "none";
+  loadExistingPlan();
+}
+
+document.getElementById("bev-select").onchange = e => {
+  Store.state.settings.beverage = e.target.value; Store.save();
+};
+document.getElementById("btn-edit-toggle").onclick = () => {
+  editMode = !editMode;
+  document.getElementById("btn-edit-toggle").textContent = editMode ? "Done" : "Edit Plan";
+  loadExistingPlan();
+};
+document.getElementById("btn-generate").onclick = () => {
+  renderPlan(generatePlan(document.getElementById("plan-start").value, 7));
+};
+document.getElementById("btn-save-template").onclick = () => {
+  const start = document.getElementById("plan-start").value;
+  const tpl = {};
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start); d.setDate(d.getDate()+i);
+    const key = d.toISOString().slice(0,10);
+    const dow = d.getDay();
+    if (Store.state.plans[key]) tpl[dow] = Store.state.plans[key];
+  }
+  Store.state.template = tpl; Store.save();
+  alert("Weekly template saved. It'll be suggested when you don't have a plan for the coming week.");
+};
+document.getElementById("btn-apply-template").onclick = () => {
+  const tpl = Store.state.template; if (!tpl) return;
+  const start = document.getElementById("plan-start").value;
+  const p = pantry(), bev = Store.state.settings.beverage;
+  const substitutions = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start); d.setDate(d.getDate()+i);
+    const key = d.toISOString().slice(0,10), dow = d.getDay();
+    const saved = tpl[dow]; if (!saved) continue;
     const meals = {};
     for (const slot of ["breakfast","lunch","tea","dinner"]) {
-      const pick = pickMeal(slot, p, recent[slot].slice(-2));
-      if (pick) {
-        meals[slot] = { display: pick.display };
-        recent[slot].push(pick.name);
-      } else {
-        meals[slot] = { display: "—", missing: true };
+      const want = saved[slot]; if (!want) continue;
+      const rule = MEAL_RULES[slot].find(m => m.name === want.name);
+      const cooked = rule ? tryCook(rule, p, true) : null;
+      if (cooked) meals[slot] = { name: cooked.name, display: cooked.display, missing: [] };
+      else {
+        // Smart substitution: same type first, then same slot
+        const options = allCookable(slot, p, bev).filter(c => c.fullyCookable);
+        const sameType = options.find(o => rule && o.type === rule.type);
+        const sub = sameType || options[0];
+        if (sub) { meals[slot] = { name: sub.name, display: sub.display + " ↺", missing: [] };
+          substitutions.push(`${new Date(key).toLocaleDateString(undefined,{weekday:"short"})} ${slot}: ${want.name} → ${sub.name}`); }
+        else meals[slot] = { name: null, display: want.name + " (missing)", missing: ["ingredients"] };
       }
     }
     Store.state.plans[key] = meals;
-    plan.push({ date: key, meals });
   }
+  Store.state.templateDismissedWeek = isoWeek(new Date());
   Store.save();
-  return plan;
-}
-
-function renderPlan(plan) {
-  const grid = document.getElementById("plan-grid");
-  grid.innerHTML = "";
-  let gaps = 0;
-  plan.forEach(d => {
-    const card = document.createElement("div");
-    card.className = "day-card";
-    const label = new Date(d.date).toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
-    const row = (slot, icon) => {
-      const m = d.meals[slot] || {};
-      if (m.missing) gaps++;
-      const cls = m.missing ? "meal-row missing" : "meal-row";
-      return `<div class="${cls}"><b>${icon} ${slot}</b>${m.display || "—"}</div>`;
-    };
-    card.innerHTML = `<h4>${label}</h4>
-      ${row("breakfast","🌅")}${row("lunch","🍛")}${row("tea","☕")}${row("dinner","🌙")}`;
-    grid.appendChild(card);
-  });
-  const note = document.getElementById("plan-note");
-  note.textContent = gaps
-    ? `${gaps} slot${gaps>1?"s":""} couldn't be filled — stock more ingredients in Kitchen and regenerate.`
-    : `All ${plan.length * 4} slots filled from your kitchen.`;
-}
-
-document.getElementById("plan-start").value = new Date().toISOString().slice(0, 10);
-document.getElementById("btn-generate").onclick = () => {
-  renderPlan(generatePlan(document.getElementById("plan-start").value, 7));
+  if (substitutions.length) alert("Applied with substitutions:\n\n" + substitutions.join("\n"));
+  renderMealsTab();
+};
+document.getElementById("btn-dismiss-template").onclick = () => {
+  Store.state.templateDismissedWeek = isoWeek(new Date()); Store.save(); renderMealsTab();
 };
 
 function loadExistingPlan() {
   const start = document.getElementById("plan-start").value;
   const plan = [];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(start); d.setDate(d.getDate() + i);
-    const key = d.toISOString().slice(0, 10);
+    const d = new Date(start); d.setDate(d.getDate()+i);
+    const key = d.toISOString().slice(0,10);
     if (Store.state.plans[key]) plan.push({ date: key, meals: Store.state.plans[key] });
   }
   if (plan.length) renderPlan(plan);
+  else { document.getElementById("plan-grid").innerHTML = ""; document.getElementById("missing-panel").style.display = "none"; }
 }
 
-// ============== REMINDERS ==============
+function renderPlan(plan) {
+  const grid = document.getElementById("plan-grid"); grid.innerHTML = "";
+  const p = pantry(), bev = Store.state.settings.beverage;
+  const missingSet = new Set();
+  plan.forEach(d => {
+    const card = document.createElement("div"); card.className = "day-card";
+    const label = new Date(d.date).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+    let html = `<h4>${label}</h4>`;
+    for (const [slot, icon] of [["breakfast","🌅"],["lunch","🍛"],["tea","☕"],["dinner","🌙"]]) {
+      const m = d.meals[slot] || {};
+      (m.missing||[]).forEach(x => {
+        const tok = x.toLowerCase();
+        // only add real ingredient tokens, skip "curry ingredients" etc.
+        if (tok.includes(" ")) return;
+        const item = Store.state.items.find(i => i.name.toLowerCase() === tok);
+        if (item && !item.needsBuy && item.qty === 0) missingSet.add(item.id);
+      });
+      if (editMode) {
+        const opts = allCookable(slot, p, bev);
+        const sel = opts.map(o => `<option value="${o.name}" ${m.name===o.name?"selected":""}>${o.display}${o.fullyCookable?"":" ⚠"}</option>`).join("");
+        html += `<div class="meal-row"><b>${icon} ${slot}</b>
+          <select data-date="${d.date}" data-slot="${slot}">${sel || `<option>—</option>`}</select></div>`;
+      } else {
+        const miss = (m.missing||[]).length ? `<span class="miss">needs: ${m.missing.join(", ")}</span>` : "";
+        html += `<div class="meal-row${m.missing?.length?" partial":""}"><b>${icon} ${slot}</b>${m.display || "—"}${miss}</div>`;
+      }
+    }
+    card.innerHTML = html; grid.appendChild(card);
+  });
+  if (editMode) grid.querySelectorAll("select").forEach(s => {
+    s.onchange = () => {
+      const rule = MEAL_RULES[s.dataset.slot].find(r => r.name === s.value);
+      const cooked = rule ? tryCook(rule, p, false) : null;
+      if (cooked) Store.state.plans[s.dataset.date][s.dataset.slot] = { name: cooked.name, display: cooked.display, missing: cooked.missing };
+      Store.save();
+    };
+  });
+  renderMissingPanel(missingSet);
+  document.getElementById("btn-save-template").style.display = plan.length ? "inline-block" : "none";
+}
+
+function renderMissingPanel(idSet) {
+  const panel = document.getElementById("missing-panel");
+  const list = document.getElementById("missing-list");
+  if (!idSet.size) { panel.style.display = "none"; return; }
+  panel.style.display = "block"; list.innerHTML = "";
+  [...idSet].forEach(id => {
+    const it = Store.state.items.find(i => i.id === id); if (!it) return;
+    const chip = document.createElement("span"); chip.className = "chip";
+    chip.innerHTML = `${it.name} <button title="Approve">✓</button><button title="Dismiss">✗</button>`;
+    const [ok, no] = chip.querySelectorAll("button");
+    ok.onclick = () => { it.needsBuy = true; Store.save(); chip.remove(); if (!list.children.length) panel.style.display = "none"; };
+    no.onclick = () => { chip.remove(); if (!list.children.length) panel.style.display = "none"; };
+    list.appendChild(chip);
+  });
+}
+document.getElementById("btn-approve-all").onclick = () => {
+  document.querySelectorAll("#missing-list .chip button[title=Approve]").forEach(b => b.click());
+};
+
+document.getElementById("plan-start").value = new Date().toISOString().slice(0,10);
+
+// ---------- Reminders ----------
 function renderReminders() {
-  const root = document.getElementById("reminder-list");
-  root.innerHTML = "";
+  const root = document.getElementById("reminder-list"); root.innerHTML = "";
   Store.state.reminders.forEach(r => {
-    const el = document.createElement("div");
-    el.className = "rem" + (r.active ? "" : " off");
+    const el = document.createElement("div"); el.className = "rem" + (r.active?"":" off");
     el.innerHTML = `<div><b>${r.title}</b><div class="meta">${r.frequency}${r.time?" · "+r.time:""}</div></div>
       <div class="actions"><button class="btn">${r.active?"Pause":"Resume"}</button>
       <button class="btn" style="color:#c0392b">Delete</button></div>`;
     const [tg, dl] = el.querySelectorAll("button");
     tg.onclick = () => { r.active = !r.active; Store.save(); renderReminders(); };
-    dl.onclick = () => {
-      Store.state.reminders = Store.state.reminders.filter(x => x.id !== r.id);
-      Store.save(); renderReminders();
-    };
+    dl.onclick = () => { Store.state.reminders = Store.state.reminders.filter(x=>x.id!==r.id); Store.save(); renderReminders(); };
     root.appendChild(el);
   });
 }
 document.getElementById("btn-add-rem").onclick = () => {
-  const title = document.getElementById("r-title").value.trim();
-  if (!title) return;
-  Store.state.reminders.push({
-    id: uid(), title,
+  const title = document.getElementById("r-title").value.trim(); if (!title) return;
+  Store.state.reminders.push({ id: uid(), title,
     frequency: document.getElementById("r-freq").value,
-    time: document.getElementById("r-time").value || null,
-    active: true,
-  });
-  Store.save();
-  document.getElementById("r-title").value = "";
-  renderReminders();
+    time: document.getElementById("r-time").value || null, active: true });
+  Store.save(); document.getElementById("r-title").value = ""; renderReminders();
 };
 document.getElementById("btn-enable-notif").onclick = async () => {
-  if (!("Notification" in window)) return alert("Notifications not supported.");
+  if (!("Notification" in window)) return alert("Not supported.");
   const res = await Notification.requestPermission();
-  alert(res === "granted" ? "Notifications enabled ✅" : "Permission: " + res);
+  alert(res === "granted" ? "Enabled ✅" : "Permission: " + res);
 };
 function checkReminders() {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  const hhmm = now.toTimeString().slice(0, 5);
+  const now = new Date(), today = now.toISOString().slice(0,10), hhmm = now.toTimeString().slice(0,5);
   Store.state.reminders.forEach(r => {
     if (!r.active || !r.time || r.time !== hhmm) return;
     if (r.frequency === "weekly" && now.getDay() !== 1) return;
@@ -324,11 +388,8 @@ function checkReminders() {
     Store.state.notifiedDates[r.id] = stamp; Store.save();
   });
 }
-setInterval(checkReminders, 30 * 1000);
+setInterval(checkReminders, 30*1000);
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
 
-Store.load();
-renderKitchen();
-loadExistingPlan();
-renderReminders();
+Store.load(); renderKitchen(); renderReminders(); renderMealsTab();
