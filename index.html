@@ -15,24 +15,80 @@
   <div><h1>Pachaka Lokam</h1><p class="tag">From grocery to meal, simplified.</p></div>
 </header>
 <nav class="tabs">
-  <button class="tab active" data-tab="kitchen">🍳 Kitchen</button>
+  <button class="tab active" data-tab="today">🗓 Today</button>
+  <button class="tab" data-tab="kitchen">🍳 Kitchen</button>
   <button class="tab" data-tab="grocery">🛒 Grocery</button>
   <button class="tab" data-tab="meals">🍲 Meal Plan</button>
   <button class="tab" data-tab="reminders">🔔 Reminders</button>
 </nav>
 <main>
-  <section id="kitchen" class="panel active">
+
+  <!-- ===== TODAY ===== -->
+  <section id="today" class="panel active">
+    <div class="today-header">
+      <div id="today-date" class="today-date-label"></div>
+      <div class="row">
+        <button class="btn" id="btn-today-from-template">📋 From Template</button>
+        <button class="btn primary" id="btn-today-suggest">✨ Suggest Today</button>
+      </div>
+    </div>
+    <p class="hint">Today's meals based on your kitchen. Change any slot with the dropdown.</p>
+
+    <div class="today-grid">
+      <!-- Breakfast -->
+      <div class="today-card" id="today-breakfast">
+        <div class="today-slot-header"><span class="slot-icon">🌅</span><span class="slot-label">Breakfast</span></div>
+        <div class="today-meal-display suggestion">—</div>
+        <span class="today-missing miss" style="display:none"></span>
+        <div class="today-select-wrap">
+          <select></select>
+        </div>
+      </div>
+      <!-- Lunch -->
+      <div class="today-card" id="today-lunch">
+        <div class="today-slot-header"><span class="slot-icon">🍛</span><span class="slot-label">Lunch</span></div>
+        <div class="today-meal-display suggestion">—</div>
+        <span class="today-missing miss" style="display:none"></span>
+        <div class="today-select-wrap">
+          <select></select>
+        </div>
+      </div>
+      <!-- Tea -->
+      <div class="today-card" id="today-tea">
+        <div class="today-slot-header"><span class="slot-icon">☕</span><span class="slot-label">Evening Tea</span></div>
+        <div class="today-meal-display suggestion">—</div>
+        <span class="today-missing miss" style="display:none"></span>
+        <div class="today-select-wrap">
+          <select></select>
+        </div>
+      </div>
+      <!-- Dinner -->
+      <div class="today-card" id="today-dinner">
+        <div class="today-slot-header"><span class="slot-icon">🌙</span><span class="slot-label">Dinner</span></div>
+        <div class="today-meal-display suggestion">—</div>
+        <span class="today-missing miss" style="display:none"></span>
+        <div class="today-select-wrap">
+          <select></select>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== KITCHEN ===== -->
+  <section id="kitchen" class="panel">
     <div class="toolbar"><h2>What's in my Kitchen</h2><button class="btn" id="btn-reset-month">Reset Month</button></div>
     <p class="hint">Update quantities as you use things. Tap <b>Out</b> to move to Grocery.</p>
     <div id="kitchen-groups"></div>
   </section>
 
+  <!-- ===== GROCERY ===== -->
   <section id="grocery" class="panel">
     <div class="toolbar"><h2>Shopping List</h2></div>
     <p class="hint">Tap <b>Bought</b> to return items to Kitchen.</p>
     <div id="grocery-list"></div>
   </section>
 
+  <!-- ===== MEAL PLAN ===== -->
   <section id="meals" class="panel">
     <div id="template-banner" class="banner">
       <div><b>You have a saved weekly plan.</b><div class="meta">Apply it to this week — items missing in kitchen will be auto-substituted.</div></div>
@@ -55,7 +111,6 @@
     <div class="row" style="justify-content:flex-end; margin-top:12px">
       <button class="btn" id="btn-save-template" style="display:none">💾 Save as Weekly Template</button>
     </div>
-
     <div id="missing-panel" class="missing-panel" style="display:none">
       <div class="toolbar"><h3>Missing for this plan</h3><button class="btn xs primary" id="btn-approve-all">Approve all → Grocery</button></div>
       <p class="hint">Approve items to add them to your Grocery list. Dismiss if not needed.</p>
@@ -63,18 +118,73 @@
     </div>
   </section>
 
+  <!-- ===== REMINDERS ===== -->
   <section id="reminders" class="panel">
-    <div class="toolbar"><h2>Smart Reminders</h2><button class="btn" id="btn-enable-notif">Enable Notifications</button></div>
-    <div id="reminder-list"></div>
-    <div class="add-row">
-      <input id="r-title" placeholder="Reminder title" />
-      <select id="r-freq"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="custom">Custom</option></select>
-      <input id="r-time" type="time" />
-      <button class="btn primary" id="btn-add-rem">Add</button>
+    <!-- Sub-tabs -->
+    <nav class="rem-tabs">
+      <button class="rem-tab active" data-remtab="rem-alerts">🔔 Reminders</button>
+      <button class="rem-tab" data-remtab="rem-tracker">📅 Tracker</button>
+    </nav>
+
+    <!-- Reminders sub-panel -->
+    <div id="rem-alerts" class="rem-panel active">
+      <div class="toolbar" style="margin-top:14px"><h2>Smart Reminders</h2><button class="btn" id="btn-enable-notif">Enable Notifications</button></div>
+      <div id="reminder-list"></div>
+      <div class="add-row">
+        <input id="r-title" placeholder="Reminder title" />
+        <select id="r-freq"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="custom">Custom</option></select>
+        <input id="r-time" type="time" />
+        <button class="btn primary" id="btn-add-rem">Add</button>
+      </div>
+    </div>
+
+    <!-- Tracker sub-panel -->
+    <div id="rem-tracker" class="rem-panel">
+      <div class="tracker-header">
+        <h2>Monthly Tracker</h2>
+        <div class="row">
+          <button class="btn xs" id="tracker-prev">‹ Prev</button>
+          <span id="tracker-month-label" class="tracker-month"></span>
+          <button class="btn xs" id="tracker-next">Next ›</button>
+        </div>
+      </div>
+
+      <!-- Stats strip -->
+      <div class="tracker-stats">
+        <div class="stat-card maid-color">
+          <div class="stat-val" id="stat-maid-present">0</div>
+          <div class="stat-lbl">Maid Present</div>
+        </div>
+        <div class="stat-card absent-color">
+          <div class="stat-val" id="stat-maid-absent">0</div>
+          <div class="stat-lbl">Maid Absent</div>
+        </div>
+        <div class="stat-card milk-color">
+          <div class="stat-val" id="stat-milk-received">0</div>
+          <div class="stat-lbl">Milk Days</div>
+        </div>
+        <div class="stat-card missed-color">
+          <div class="stat-val" id="stat-milk-missed">0</div>
+          <div class="stat-lbl">Milk Missed</div>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="tracker-legend">
+        <span class="leg-dot present"></span> Maid present &nbsp;
+        <span class="leg-dot absent"></span> Maid absent &nbsp;
+        <span class="leg-dot received"></span> Milk received &nbsp;
+        <span class="leg-dot missed"></span> Milk missed
+        <span class="leg-note">· Tap each badge to cycle: blank → yes → no → blank</span>
+      </div>
+
+      <!-- Calendar -->
+      <div id="tracker-grid" class="tracker-grid"></div>
     </div>
   </section>
+
 </main>
-<footer>Pachaka Lokam · v0.5 · Kerala edition</footer>
+<footer>Pachaka Lokam · v0.6 · Kerala edition</footer>
 <script src="data.js"></script>
 <script src="app.js"></script>
 </body>

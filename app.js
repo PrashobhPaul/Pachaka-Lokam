@@ -1,9 +1,12 @@
-/* Pachaka Lokam v0.5 */
+/* Pachaka Lokam v0.6 */
 const STORAGE_KEY = "pl_state_v4";
 const uid = () => Math.random().toString(36).slice(2, 10);
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const isoWeek = d => { const x=new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate()+4-(x.getDay()||7));
   const y=new Date(x.getFullYear(),0,1); return `${x.getFullYear()}-W${String(Math.ceil(((x-y)/86400000+1)/7)).padStart(2,"0")}`; };
+const todayKey = () => new Date().toISOString().slice(0,10);
+const monthKey = () => new Date().toISOString().slice(0,7);
+const fmtDate = d => new Date(d).toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short"});
 
 const Store = {
   state: null,
@@ -18,7 +21,8 @@ const Store = {
         unit: u.unit, qty: 0, step: u.step, defaultQty: u.defaultQty, needsBuy: false, seasonal }));
     });
     this.state = { items, plans: {}, reminders: REMINDER_SEED.map(r => ({ id: uid(), ...r })),
-      notifiedDates: {}, settings: { beverage: "tea" }, template: null, templateDismissedWeek: null };
+      notifiedDates: {}, settings: { beverage: "tea" }, template: null, templateDismissedWeek: null,
+      tracker: { maid: {}, milk: {} } };
     this.save();
   },
   migrate() {
@@ -26,23 +30,133 @@ const Store = {
     this.state.settings.beverage ||= "tea";
     this.state.template ||= null;
     this.state.templateDismissedWeek ||= null;
+    this.state.tracker ||= { maid: {}, milk: {} };
+    this.state.tracker.maid ||= {};
+    this.state.tracker.milk ||= {};
   },
   save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state)); },
 };
 
+// ===== TAB NAVIGATION =====
 document.querySelectorAll(".tab").forEach(t => {
   t.onclick = () => {
     document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
     document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
     t.classList.add("active");
     document.getElementById(t.dataset.tab).classList.add("active");
+    if (t.dataset.tab === "today") renderToday();
     if (t.dataset.tab === "grocery") renderGrocery();
     if (t.dataset.tab === "kitchen") renderKitchen();
     if (t.dataset.tab === "meals") renderMealsTab();
+    if (t.dataset.tab === "reminders") { renderReminders(); renderTracker(); }
   };
 });
 
-// ---------- Kitchen ----------
+// ===== TODAY'S MEAL PLAN =====
+function renderToday() {
+  const key = todayKey();
+  const p = pantry();
+  const bev = Store.state.settings.beverage;
+  const today = new Date();
+  document.getElementById("today-date").textContent =
+    today.toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+
+  // Check if we have a saved plan for today
+  const saved = Store.state.plans[key];
+  const slots = [
+    { id:"breakfast", icon:"🌅", label:"Breakfast" },
+    { id:"lunch",     icon:"🍛", label:"Lunch" },
+    { id:"tea",       icon:"☕", label:"Evening Tea" },
+    { id:"dinner",    icon:"🌙", label:"Dinner" },
+  ];
+
+  slots.forEach(({ id, icon, label }) => {
+    const card = document.getElementById(`today-${id}`);
+    const saved_meal = saved && saved[id];
+    const options = allCookable(id, p, bev);
+    const current = saved_meal ? saved_meal.name : null;
+
+    // Build dropdown
+    const sel = card.querySelector("select");
+    sel.innerHTML = options.map(o =>
+      `<option value="${o.name}" ${o.name===current?"selected":""}>${o.display}${o.fullyCookable?"":" ⚠"}</option>`
+    ).join("") || `<option>— nothing available —</option>`;
+
+    // Show display text
+    const disp = card.querySelector(".today-meal-display");
+    if (saved_meal && saved_meal.display) {
+      disp.textContent = saved_meal.display;
+      disp.className = "today-meal-display set";
+    } else if (options.length) {
+      disp.textContent = options[0].display + (options[0].fullyCookable ? "" : " ⚠");
+      disp.className = "today-meal-display suggestion";
+    } else {
+      disp.textContent = "No suggestion — stock basics";
+      disp.className = "today-meal-display empty";
+    }
+
+    // Show missing badge
+    const miss = card.querySelector(".today-missing");
+    if (saved_meal && saved_meal.missing && saved_meal.missing.length) {
+      miss.textContent = "needs: " + saved_meal.missing.join(", ");
+      miss.style.display = "inline-block";
+    } else miss.style.display = "none";
+
+    // Wire select change
+    sel.onchange = () => {
+      const rule = MEAL_RULES[id].find(r => r.name === sel.value);
+      const cooked = rule ? tryCook(rule, p, false) : null;
+      if (!cooked) return;
+      Store.state.plans[key] ||= {};
+      Store.state.plans[key][id] = { name: cooked.name, display: cooked.display, missing: cooked.missing };
+      Store.save();
+      renderToday();
+    };
+  });
+}
+
+document.getElementById("btn-today-from-template").onclick = () => {
+  const key = todayKey();
+  const tpl = Store.state.template;
+  const p = pantry(), bev = Store.state.settings.beverage;
+  if (!tpl) { alert("No weekly template saved yet. Go to Meal Plan tab, generate and save a template first."); return; }
+  const dow = new Date().getDay();
+  const dayPlan = tpl[dow];
+  if (!dayPlan) { alert("No template entry for today. Try generating a new plan."); return; }
+  Store.state.plans[key] = {};
+  for (const slot of ["breakfast","lunch","tea","dinner"]) {
+    const want = dayPlan[slot]; if (!want) continue;
+    const rule = MEAL_RULES[slot].find(m => m.name === want.name);
+    const cooked = rule ? tryCook(rule, p, true) : null;
+    if (cooked) Store.state.plans[key][slot] = { name: cooked.name, display: cooked.display, missing: [] };
+    else {
+      const opts = allCookable(slot, p, bev).filter(c => c.fullyCookable);
+      const sub = opts[0];
+      Store.state.plans[key][slot] = sub
+        ? { name: sub.name, display: sub.display + " ↺", missing: [] }
+        : { name: want.name, display: want.name + " (missing)", missing: ["ingredients"] };
+    }
+  }
+  Store.save(); renderToday();
+};
+
+document.getElementById("btn-today-suggest").onclick = () => {
+  const key = todayKey();
+  const p = pantry(), bev = Store.state.settings.beverage;
+  const recent = { breakfast:[], lunch:[], tea:[], dinner:[] };
+  const meals = {};
+  for (const slot of ["breakfast","lunch","tea","dinner"]) {
+    const pick = pickMeal(slot, p, recent[slot], bev);
+    meals[slot] = pick
+      ? { name: pick.name, display: pick.display, missing: pick.missing }
+      : { name: null, display: "No suggestion — stock basics", missing: [] };
+    if (pick) recent[slot].push(pick.name);
+  }
+  Store.state.plans[key] = meals;
+  Store.save(); renderToday();
+};
+
+// ===== KITCHEN =====
 function renderKitchen() {
   const root = document.getElementById("kitchen-groups"); root.innerHTML = "";
   const groups = {};
@@ -82,7 +196,7 @@ document.getElementById("btn-reset-month").onclick = () => {
   Store.save(); renderKitchen();
 };
 
-// ---------- Grocery ----------
+// ===== GROCERY =====
 function renderGrocery() {
   const root = document.getElementById("grocery-list"); root.innerHTML = "";
   const toBuy = Store.state.items.filter(i => i.needsBuy);
@@ -105,7 +219,7 @@ function renderGrocery() {
   });
 }
 
-// ---------- Pantry matching ----------
+// ===== PANTRY MATCHING =====
 function pantry() { return new Set(Store.state.items.filter(i => i.qty > 0).map(i => i.name.toLowerCase())); }
 function has(token, p) {
   const t = token.toLowerCase();
@@ -118,7 +232,7 @@ function has(token, p) {
 function pickAll(list, p)   { return list.filter(x => has(x, p)); }
 function pickFirst(list, p) { return list.find(x => has(x, p)); }
 
-// ---------- Meal engine ----------
+// ===== MEAL ENGINE =====
 function resolveCurry(p) {
   for (const cu of DINNER_CURRIES) {
     if (!cu.needs.every(n => has(n, p))) continue;
@@ -149,15 +263,12 @@ function tryCook(meal, p, strict = true) {
 function pickMeal(slot, p, recent, bev) {
   let pool = MEAL_RULES[slot];
   if (slot === "tea") {
-    const milk = has("milk", p);
     pool = pool.filter(m => !m.beverage || m.beverage === "either" || bev === "either" || m.beverage === bev);
-    pool = pool.filter(m => !m.blackFallback || !milk); // prefer milk version when milk available
+    pool = pool.filter(m => !m.blackFallback || !has("milk", p));
   }
-  // strict first
   let cookable = pool.map(m => tryCook(m, p, true)).filter(Boolean).filter(c => !recent.includes(c.name));
   if (!cookable.length) cookable = pool.map(m => tryCook(m, p, true)).filter(Boolean);
   if (!cookable.length) {
-    // fallback: needs >=50% of base present
     cookable = pool.map(m => {
       const c = tryCook(m, p, false); if (!c) return null;
       const total = m.base.length || 1;
@@ -202,7 +313,7 @@ function generatePlan(startDate, days = 7) {
   Store.save(); return plan;
 }
 
-// ---------- Meal tab rendering ----------
+// ===== MEALS TAB =====
 let editMode = false;
 
 function renderMealsTab() {
@@ -238,7 +349,7 @@ document.getElementById("btn-save-template").onclick = () => {
     if (Store.state.plans[key]) tpl[dow] = Store.state.plans[key];
   }
   Store.state.template = tpl; Store.save();
-  alert("Weekly template saved. It'll be suggested when you don't have a plan for the coming week.");
+  alert("Weekly template saved.");
 };
 document.getElementById("btn-apply-template").onclick = () => {
   const tpl = Store.state.template; if (!tpl) return;
@@ -256,7 +367,6 @@ document.getElementById("btn-apply-template").onclick = () => {
       const cooked = rule ? tryCook(rule, p, true) : null;
       if (cooked) meals[slot] = { name: cooked.name, display: cooked.display, missing: [] };
       else {
-        // Smart substitution: same type first, then same slot
         const options = allCookable(slot, p, bev).filter(c => c.fullyCookable);
         const sameType = options.find(o => rule && o.type === rule.type);
         const sub = sameType || options[0];
@@ -300,7 +410,6 @@ function renderPlan(plan) {
       const m = d.meals[slot] || {};
       (m.missing||[]).forEach(x => {
         const tok = x.toLowerCase();
-        // only add real ingredient tokens, skip "curry ingredients" etc.
         if (tok.includes(" ")) return;
         const item = Store.state.items.find(i => i.name.toLowerCase() === tok);
         if (item && !item.needsBuy && item.qty === 0) missingSet.add(item.id);
@@ -350,7 +459,7 @@ document.getElementById("btn-approve-all").onclick = () => {
 
 document.getElementById("plan-start").value = new Date().toISOString().slice(0,10);
 
-// ---------- Reminders ----------
+// ===== REMINDERS =====
 function renderReminders() {
   const root = document.getElementById("reminder-list"); root.innerHTML = "";
   Store.state.reminders.forEach(r => {
@@ -376,6 +485,118 @@ document.getElementById("btn-enable-notif").onclick = async () => {
   const res = await Notification.requestPermission();
   alert(res === "granted" ? "Enabled ✅" : "Permission: " + res);
 };
+
+// ===== REMINDER SUB-TABS =====
+document.querySelectorAll(".rem-tab").forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll(".rem-tab").forEach(x => x.classList.remove("active"));
+    document.querySelectorAll(".rem-panel").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    document.getElementById(t.dataset.remtab).classList.add("active");
+  };
+});
+
+// ===== TRACKER =====
+let trackerMonth = monthKey();
+
+function renderTracker() {
+  renderTrackerMonth();
+}
+
+function renderTrackerMonth() {
+  const [yr, mo] = trackerMonth.split("-").map(Number);
+  const daysInMonth = new Date(yr, mo, 0).getDate();
+  const today = todayKey();
+
+  document.getElementById("tracker-month-label").textContent =
+    new Date(yr, mo-1, 1).toLocaleDateString("en-IN",{month:"long",year:"numeric"});
+
+  // Stats
+  const maid = Store.state.tracker.maid;
+  const milk = Store.state.tracker.milk;
+  let maidPresent = 0, maidAbsent = 0, milkReceived = 0, milkMissed = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const k = `${trackerMonth}-${String(d).padStart(2,"0")}`;
+    if (maid[k] === "present") maidPresent++;
+    if (maid[k] === "absent")  maidAbsent++;
+    if (milk[k] === "received") milkReceived++;
+    if (milk[k] === "missed")   milkMissed++;
+  }
+  document.getElementById("stat-maid-present").textContent = maidPresent;
+  document.getElementById("stat-maid-absent").textContent  = maidAbsent;
+  document.getElementById("stat-milk-received").textContent = milkReceived;
+  document.getElementById("stat-milk-missed").textContent   = milkMissed;
+
+  // Calendar grid
+  const grid = document.getElementById("tracker-grid");
+  grid.innerHTML = "";
+  // Day headers
+  ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(d => {
+    const h = document.createElement("div");
+    h.className = "cal-header"; h.textContent = d; grid.appendChild(h);
+  });
+  // Offset blank cells
+  const firstDow = new Date(yr, mo-1, 1).getDay();
+  for (let i = 0; i < firstDow; i++) {
+    const blank = document.createElement("div"); blank.className = "cal-cell blank"; grid.appendChild(blank);
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const k = `${trackerMonth}-${String(d).padStart(2,"0")}`;
+    const isToday = k === today;
+    const isFuture = k > today;
+    const cell = document.createElement("div");
+    cell.className = "cal-cell" + (isToday?" today":"") + (isFuture?" future":"");
+
+    const maidVal = maid[k] || "";
+    const milkVal = milk[k] || "";
+
+    cell.innerHTML = `
+      <div class="cal-day">${d}</div>
+      <div class="cal-badges">
+        <button class="badge maid-badge ${maidVal}" data-key="${k}" data-type="maid" title="Toggle maid">
+          ${maidVal === "present" ? "✓ Maid" : maidVal === "absent" ? "✗ Maid" : "· Maid"}
+        </button>
+        <button class="badge milk-badge ${milkVal}" data-key="${k}" data-type="milk" title="Toggle milk">
+          ${milkVal === "received" ? "✓ Milk" : milkVal === "missed" ? "✗ Milk" : "· Milk"}
+        </button>
+      </div>`;
+
+    if (!isFuture) {
+      cell.querySelectorAll(".badge").forEach(btn => {
+        btn.onclick = () => {
+          const type = btn.dataset.type;
+          const key = btn.dataset.key;
+          if (type === "maid") {
+            const cur = Store.state.tracker.maid[key] || "";
+            Store.state.tracker.maid[key] = cur === "" ? "present" : cur === "present" ? "absent" : "";
+            if (Store.state.tracker.maid[key] === "") delete Store.state.tracker.maid[key];
+          } else {
+            const cur = Store.state.tracker.milk[key] || "";
+            Store.state.tracker.milk[key] = cur === "" ? "received" : cur === "received" ? "missed" : "";
+            if (Store.state.tracker.milk[key] === "") delete Store.state.tracker.milk[key];
+          }
+          Store.save(); renderTrackerMonth();
+        };
+      });
+    }
+    grid.appendChild(cell);
+  }
+}
+
+document.getElementById("tracker-prev").onclick = () => {
+  const [yr, mo] = trackerMonth.split("-").map(Number);
+  const d = new Date(yr, mo-2, 1);
+  trackerMonth = d.toISOString().slice(0,7);
+  renderTrackerMonth();
+};
+document.getElementById("tracker-next").onclick = () => {
+  const [yr, mo] = trackerMonth.split("-").map(Number);
+  const d = new Date(yr, mo, 1);
+  trackerMonth = d.toISOString().slice(0,7);
+  renderTrackerMonth();
+};
+
+// ===== NOTIFICATION CHECK =====
 function checkReminders() {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   const now = new Date(), today = now.toISOString().slice(0,10), hhmm = now.toTimeString().slice(0,5);
@@ -392,4 +613,8 @@ setInterval(checkReminders, 30*1000);
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
 
-Store.load(); renderKitchen(); renderReminders(); renderMealsTab();
+Store.load();
+renderToday();
+renderKitchen();
+renderReminders();
+renderMealsTab();
