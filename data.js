@@ -1,128 +1,313 @@
-// Pachaka Lokam — v0.5 seed
-const U = (unit, defaultQty, step) => ({ unit, defaultQty, step });
+// Pachaka Lokam — seed data pulled from the spec document.
+// Loaded once; user state (checked/qty/plans/reminders) lives in localStorage.
 
 const GROCERY_SEED = [
-  { category: "Vegetables", items: [
-    ["Carrot",U("kg",0.5,0.25)],["Potato",U("kg",1,0.5)],["Tomato",U("kg",1,0.25)],
-    ["Onion",U("kg",2,0.5)],["Shallots",U("g",250,50)],["Ladiesfinger",U("kg",0.5,0.25)],
-    ["Drumstick",U("nos",4,1)],["Ginger",U("g",100,50)],["Garlic",U("g",100,50)],
-    ["Chilli",U("g",100,50)],["Green chilli",U("g",100,50)],["Curry leaves",U("g",50,25)],
-    ["Cauliflower",U("nos",1,1)],["Cabbage",U("nos",1,1)],["Snake gourd",U("kg",0.5,0.25)],
-    ["Ash gourd",U("kg",1,0.5)],["Pumpkin",U("kg",1,0.5)],["Yam",U("kg",0.5,0.25)],
-    ["Raw banana",U("nos",3,1)],["Raw mango",U("nos",2,1)],["Beans",U("kg",0.5,0.25)],
-    ["Beetroot",U("kg",0.5,0.25)],["Cucumber",U("kg",0.5,0.25)],
-  ]},
-  { category: "Staples & Pulses", items: [
-    ["Rice",U("kg",5,1)],["Toor dal",U("kg",1,0.25)],["Moong dal",U("kg",0.5,0.25)],
-    ["Urad dal",U("kg",0.5,0.25)],["Chana",U("kg",0.5,0.25)],["Cowpeas",U("kg",0.5,0.25)],
-    ["Rawa",U("kg",0.5,0.25)],["Aata",U("kg",2,0.5)],["Sugar",U("kg",1,0.25)],
-    ["Salt",U("kg",1,0.25)],["Tea powder",U("g",250,50)],["Coffee powder",U("g",200,50)],
-  ]},
-  { category: "Non-Veg", items: [["Chicken",U("kg",1,0.25)],["Fish",U("kg",1,0.25)],["Egg",U("nos",12,6)]]},
-  { category: "Dairy & Bakery", items: [
-    ["Bread",U("pkt",1,1)],["Curd",U("g",500,100)],["Milk",U("L",1,0.5)],["Coconut milk",U("ml",400,100)],
-  ]},
-  { category: "Oils", items: [["Coconut oil",U("L",1,0.5)],["Rice bran oil",U("L",1,0.5)]]},
-  { category: "Spices", items: [
-    ["Coconut",U("nos",2,1)],["Chilli powder",U("g",200,50)],
-    ["Masala powder",U("g",200,50)],["General spices",U("g",200,50)],["Mustard seeds",U("g",100,25)],
-  ]},
-  { category: "Snacks", items: [
-    ["Biscuit",U("pkt",2,1)],["Rusk",U("pkt",1,1)],["Cookies",U("pkt",1,1)],
-    ["Mixture",U("pkt",1,1)],["Banana chips",U("pkt",1,1)],
-  ]},
-  { category: "Fruits (Seasonal)", items: [
-    ["Banana",U("nos",12,6)],["Apple",U("kg",1,0.5)],["Mango",U("kg",1,0.5)],
-    ["Grapes",U("kg",0.5,0.25)],["Pomegranate",U("nos",2,1)],["Watermelon",U("nos",1,1)],
-    ["Kiwi",U("nos",4,2)],["Strawberry",U("g",250,50)],
-  ]},
+  { category: "Vegetables", items: ["Carrot","Potato","Tomato","Onion","Ladiesfinger","Drumstick","Ginger","Garlic","Chilli","Curry leaves","Cauliflower","Cabbage","Snake gourd","Pumpkin","Yam","Raw mango"] },
+  { category: "Staples & Pulses", items: ["Rice","Toor dal","Moong dal","Urad dal","Chana","Rawa","Aata","Sugar","Salt","Tea powder"] },
+  { category: "Non-Veg", items: ["Chicken","Fish","Egg"] },
+  { category: "Dairy & Bakery", items: ["Bread","Curd","Milk"] },
+  { category: "Oils", items: ["Coconut oil","Rice bran oil"] },
+  { category: "Spices", items: ["Coconut","Chilli powder","Masala powder","General spices"] },
+  { category: "Snacks", items: ["Biscuit","Rusk","Cookies"] },
+  { category: "Fruits (Seasonal)", items: ["Banana","Apple","Mango","Grapes","Pomegranate","Watermelon","Kiwi","Strawberry"] },
 ];
 
-const THORAN_VEG  = ["cabbage","carrot","cauliflower","ladiesfinger","beans","beetroot","snake gourd","yam","pumpkin"];
-const SAMBAR_VEG  = ["drumstick","ash gourd","pumpkin","carrot","ladiesfinger"];
-const AVIAL_VEG   = ["raw banana","yam","carrot","beans","ash gourd","snake gourd","cucumber","drumstick"];
-const FRUITS      = ["banana","apple","mango","grapes","pomegranate","watermelon","kiwi","strawberry"];
-const JUICE_FRUIT = ["mango","watermelon","grapes","pomegranate"];
-
-const KERALA_CURRIES = [
-  { name:"Sambar", needs:["toor dal","tomato","onion","chilli"], minFrom:SAMBAR_VEG, minCount:2,
-    render:m=>`Sambar (${m.join(", ")})` },
-  { name:"Avial", needs:["coconut","curd","curry leaves"], minFrom:AVIAL_VEG, minCount:4,
-    render:m=>`Avial (${m.join(", ")})` },
-  { name:"Cabbage Thoran", needs:["cabbage","coconut","green chilli"] },
-  { name:"Potato Mezhukkupuratti", needs:["potato","onion","curry leaves"] },
-  { name:"Kaalan", needs:["raw banana","yam","coconut","curd"] },
-  { name:"Olan", needs:["ash gourd","cowpeas","coconut milk"] },
-  { name:"Vegetable Stew", needs:["potato","carrot","beans","onion","coconut milk"] },
-  { name:"Pulissery (Mango)", needs:["mango","coconut","curd"] },
-  { name:"Pulissery (Ash gourd)", needs:["ash gourd","coconut","curd"] },
-  { name:"Moru Curry", needs:["curd","coconut","chilli","curry leaves"] },
-  { name:"Egg Curry", needs:["egg","onion","tomato","masala powder"] },
-  { name:"Chicken Curry", needs:["chicken","onion","masala powder","tomato"] },
-  { name:"Fish Curry", needs:["fish","coconut","chilli","onion"] },
-  { name:"Dal Fry", needs:["toor dal","tomato","onion"] },
-];
-const DINNER_CURRIES = KERALA_CURRIES;
-
-// Meal types for smart substitution (Option C)
-const MEAL_RULES = {
+const MEAL_CATALOG = {
   breakfast: [
-    { name:"Idli + Sambar", type:"steamed-rice", base:["rice","urad dal","toor dal","tomato","onion"], simple:true },
-    { name:"Dosa + Chutney", type:"dosa", base:["rice","urad dal","coconut"], simple:true },
-    { name:"Masala Dosa", type:"dosa", base:["rice","urad dal","potato","onion"], simple:true },
-    { name:"Puttu + Kadala Curry", type:"puttu", base:["rice","chana","coconut"], simple:true },
-    { name:"Appam + Kadala Curry", type:"appam", base:["rice","chana","coconut"], simple:true },
-    { name:"Idiyappam + Egg Curry", type:"idiyappam", base:["rice","egg","onion","tomato"], simple:true },
-    { name:"Idiyappam + Stew", type:"idiyappam", base:["rice","potato","carrot","beans","coconut milk","onion"], simple:true },
-    { name:"Idiyappam + Milk", type:"idiyappam", base:["rice","milk","sugar"], simple:true },
-    { name:"Upma", type:"rawa", base:["rawa","onion","curry leaves"], simple:true },
-    { name:"Poori + Potato Masala", type:"poori", base:["aata","potato","onion"], simple:true },
-    { name:"Bread + Egg Omelette", type:"bread", base:["bread","egg","onion"], simple:true },
+    { name: "Idli", simple: true },
+    { name: "Dosa", simple: true },
+    { name: "Upma", simple: true },
+    { name: "Puttu + Kadala", simple: true },
+    { name: "Bread + Egg", simple: true },
   ],
   lunch: [
-    { name:"Kerala Sadya-style Meals", type:"rice-curry", base:["rice"], withCurry:true, withThoran:true, simple:true,
-      render:c=>`Rice + ${c.curry} + ${c.thoran||"Pickle"}` },
-    { name:"Fish Curry Meals", type:"rice-nonveg", base:["rice","fish","coconut","chilli","onion"], withThoran:true, simple:false,
-      render:c=>`Rice + Fish Curry + ${c.thoran||"Pickle"}` },
-    { name:"Chicken Curry Meals", type:"rice-nonveg", base:["rice","chicken","onion","masala powder","tomato"], simple:false,
-      render:()=>`Rice + Chicken Curry + Salad` },
-    { name:"Egg Curry Meals", type:"rice-curry", base:["rice","egg","onion","tomato","masala powder"], withThoran:true, simple:true,
-      render:c=>`Rice + Egg Curry + ${c.thoran||"Pickle"}` },
-    { name:"Chicken Biriyani", type:"biriyani", base:["rice","chicken","onion","masala powder","curd","ginger","garlic"], simple:false, special:true },
-    { name:"Veg Fried Rice", type:"fried-rice", base:["rice","cabbage","carrot","onion","chilli"], simple:false, special:true },
-    { name:"Veg Pulav", type:"pulav", base:["rice","onion","carrot","masala powder","coconut oil"], simple:false, special:true },
-  ],
-  tea: [
-    { name:"Tea + Biscuit", type:"tea-snack", beverage:"tea", base:["tea powder","milk","sugar","biscuit"], simple:true },
-    { name:"Tea + Rusk", type:"tea-snack", beverage:"tea", base:["tea powder","milk","sugar","rusk"], simple:true },
-    { name:"Tea + Banana Chips", type:"tea-snack", beverage:"tea", base:["tea powder","milk","sugar","banana chips"], simple:true },
-    { name:"Tea + Mixture", type:"tea-snack", beverage:"tea", base:["tea powder","milk","sugar","mixture"], simple:true },
-    { name:"Coffee + Biscuit", type:"tea-snack", beverage:"coffee", base:["coffee powder","milk","sugar","biscuit"], simple:true },
-    { name:"Coffee + Rusk", type:"tea-snack", beverage:"coffee", base:["coffee powder","milk","sugar","rusk"], simple:true },
-    { name:"Coffee + Banana Chips", type:"tea-snack", beverage:"coffee", base:["coffee powder","milk","sugar","banana chips"], simple:true },
-    { name:"Black Tea + Biscuit", type:"tea-snack", beverage:"tea", blackFallback:true, base:["tea powder","sugar","biscuit"], simple:true },
-    { name:"Black Coffee + Biscuit", type:"tea-snack", beverage:"coffee", blackFallback:true, base:["coffee powder","sugar","biscuit"], simple:true },
-    { name:"Black Tea", type:"tea-snack", beverage:"tea", blackFallback:true, base:["tea powder","sugar"], simple:true },
-    { name:"Black Coffee", type:"tea-snack", beverage:"coffee", blackFallback:true, base:["coffee powder","sugar"], simple:true },
-    { name:"Milk + Cookies", type:"snack", beverage:"either", base:["milk","cookies"], simple:true },
-    { name:"Fresh Fruit Plate", type:"fruit", beverage:"either", base:[], minFrom:FRUITS, minCount:1, simple:true,
-      render:c=>`Fresh ${c.matched.join(" & ")} Plate` },
-    { name:"Fresh Juice", type:"juice", beverage:"either", base:["sugar"], minFrom:JUICE_FRUIT, minCount:1, simple:false,
-      render:c=>`Fresh ${c.matched[0]} Juice` },
+    { name: "Rice + Sambar + Thoran", simple: true },
+    { name: "Fish Curry Meals", simple: false },
+    { name: "Moru Curry Meals", simple: true },
+    { name: "Dal Meals", simple: true },
   ],
   dinner: [
-    { name:"Chapati + Curry", type:"chapati", base:["aata"], withCurry:true, simple:true,
-      render:c=>`Chapati + ${c.curry}` },
-    { name:"Curd Rice", type:"rice-light", base:["rice","curd","curry leaves"], simple:true },
-    { name:"Sambar Rice", type:"rice-light", base:["rice","toor dal","tomato","onion"], minFrom:SAMBAR_VEG, minCount:1, simple:true,
-      render:c=>`Sambar Rice (${c.matched.join(", ")})` },
-    { name:"Dal Khichdi", type:"rice-light", base:["rice","moong dal","tomato","onion"], simple:true },
-    { name:"Dosa + Chutney", type:"dosa", base:["rice","urad dal","coconut"], simple:true },
-    { name:"Kanji + Payar", type:"rice-light", base:["rice","cowpeas","coconut"], simple:true },
+    { name: "Chapati + Curry", simple: true },
+    { name: "Light meals", simple: true },
+    { name: "Leftovers", simple: true },
   ],
 };
 
 const REMINDER_SEED = [
-  { title:"Buy Milk", frequency:"daily", time:"07:00", active:true },
-  { title:"Vegetable shopping", frequency:"weekly", time:"09:00", active:true },
+  { title: "Buy Milk", frequency: "daily", time: "07:00", active: true },
+  { title: "Vegetable shopping", frequency: "weekly", time: "09:00", active: true },
 ];
+
+// ---------- Festival Dataset ----------
+// Each festival: name, states[], startDate, endDate, peakDay, greeting, mealPlan
+// mealPlan types: "progressive" | "pattern" | "festival" (static single-day)
+const FESTIVAL_DATA = [
+  // --- KERALA ---
+  {
+    name: "Onam",
+    states: ["Kerala"],
+    startDate: "2026-08-28",
+    endDate: "2026-09-06",
+    peakDay: "2026-09-05",
+    greeting: "Happy Onam! Onathappan varavaayi!",
+    mealPlan: {
+      type: "pattern",
+      pattern: ["simple","simple","medium","medium","medium","heavy","heavy","heavy","grand","grand"],
+      templates: {
+        simple: { lunch: ["Rice","Sambar","Thoran","Papadam"] },
+        medium: { lunch: ["Rice","Sambar","Avial","Thoran","Papadam","Pickle"] },
+        heavy:  { lunch: ["Rice","Sambar","Avial","Olan","Thoran","Papadam","Payasam"] },
+        grand:  { lunch: ["Onasadya","Avial","Olan","Kootu Curry","Erissery","Kaalan","Rasam","Sambar","Thoran","Papadam","Ada Pradhaman","Pal Payasam","Banana Chips","Sharkara Upperi"] },
+      }
+    }
+  },
+  {
+    name: "Vishu",
+    states: ["Kerala"],
+    startDate: "2026-04-14",
+    endDate: "2026-04-15",
+    peakDay: "2026-04-14",
+    greeting: "Vishu Ashamsakal!",
+    mealPlan: {
+      type: "festival",
+      meals: {
+        breakfast: ["Vishu Kanji","Thattil Koottu"],
+        lunch: ["Sadya","Vishu Katta","Veppampoorasam","Payasam"],
+        dinner: ["Rice","Sambar","Thoran","Papadam"],
+      }
+    }
+  },
+  {
+    name: "Thiruvathira",
+    states: ["Kerala"],
+    startDate: "2026-12-30",
+    endDate: "2026-12-30",
+    peakDay: "2026-12-30",
+    greeting: "Happy Thiruvathira!",
+    mealPlan: {
+      type: "festival",
+      meals: {
+        breakfast: ["Puttu","Kadala Curry"],
+        lunch: ["Rice","Sambar","Kootu Curry","Thoran"],
+        dinner: ["Thiruvathira Puzhukku","Koova Payasam"],
+      }
+    }
+  },
+  // --- TAMIL NADU ---
+  {
+    name: "Pongal",
+    states: ["Tamil Nadu"],
+    startDate: "2026-01-14",
+    endDate: "2026-01-17",
+    peakDay: "2026-01-15",
+    greeting: "Iniya Pongal Nalvazhthukkal!",
+    mealPlan: {
+      type: "progressive",
+      days: [
+        { dayOffset: 0, title: "Bhogi", meals: { lunch: ["Rice","Sambar","Kootu","Poriyal"], dinner: ["Rice","Rasam","Appalam"] }},
+        { dayOffset: 1, title: "Thai Pongal", meals: { breakfast: ["Ven Pongal","Sakkarai Pongal"], lunch: ["Rice","Sambar","Kootu","Vadai","Payasam"] }},
+        { dayOffset: 2, title: "Mattu Pongal", meals: { lunch: ["Rice","Sambar","Kootu","Poriyal","Payasam"] }},
+        { dayOffset: 3, title: "Kaanum Pongal", meals: { lunch: ["Rice","Sambar","Rasam","Poriyal"] }},
+      ]
+    }
+  },
+  {
+    name: "Navaratri",
+    states: ["Tamil Nadu","Kerala","Andhra Pradesh","Telangana"],
+    startDate: "2026-10-11",
+    endDate: "2026-10-19",
+    peakDay: "2026-10-19",
+    greeting: "Happy Navaratri! Jai Mata Di!",
+    mealPlan: {
+      type: "pattern",
+      pattern: ["simple","simple","simple","medium","medium","medium","heavy","heavy","grand"],
+      templates: {
+        simple: { lunch: ["Rice","Sambar","Kootu","Sundal"] },
+        medium: { lunch: ["Rice","Sambar","Kootu","Sundal","Vadai","Payasam"] },
+        heavy:  { lunch: ["Rice","Sambar","Kootu","Sundal","Vadai","Boli","Payasam","Sweet Pongal"] },
+        grand:  { lunch: ["Vijayadashami Special","Puliyodarai","Lemon Rice","Sundal Varieties","Vadai","Kesari","Payasam"] },
+      }
+    }
+  },
+  {
+    name: "Tamil New Year (Puthandu)",
+    states: ["Tamil Nadu"],
+    startDate: "2026-04-14",
+    endDate: "2026-04-14",
+    peakDay: "2026-04-14",
+    greeting: "Puthandu Vazthukal!",
+    mealPlan: {
+      type: "festival",
+      meals: {
+        breakfast: ["Maanga Pachadi","Neer More"],
+        lunch: ["Rice","Sambar","Rasam","Kootu","Poriyal","Vadai","Payasam"],
+        dinner: ["Rice","Rasam","Poriyal"],
+      }
+    }
+  },
+  // --- ANDHRA PRADESH ---
+  {
+    name: "Ugadi",
+    states: ["Andhra Pradesh","Telangana"],
+    startDate: "2026-03-29",
+    endDate: "2026-03-29",
+    peakDay: "2026-03-29",
+    greeting: "Ugadi Subhakankshalu!",
+    mealPlan: {
+      type: "festival",
+      meals: {
+        breakfast: ["Ugadi Pachadi","Pulihora"],
+        lunch: ["Rice","Sambar","Pappu","Bobbatlu","Payasam","Avakaya"],
+        dinner: ["Rice","Rasam","Fryums"],
+      }
+    }
+  },
+  {
+    name: "Sankranti",
+    states: ["Andhra Pradesh","Telangana"],
+    startDate: "2026-01-13",
+    endDate: "2026-01-16",
+    peakDay: "2026-01-14",
+    greeting: "Makara Sankranti Subhakankshalu!",
+    mealPlan: {
+      type: "progressive",
+      days: [
+        { dayOffset: 0, title: "Bhogi", meals: { lunch: ["Rice","Sambar","Pappu","Vada","Ariselu"] }},
+        { dayOffset: 1, title: "Sankranti", meals: { breakfast: ["Pongal","Pulihora"], lunch: ["Rice","Sambar","Pappu","Bobbatlu","Paramannam","Ariselu"] }},
+        { dayOffset: 2, title: "Kanuma", meals: { lunch: ["Rice","Sambar","Pappu","Non-veg Curry","Payasam"] }},
+        { dayOffset: 3, title: "Mukkanuma", meals: { lunch: ["Rice","Sambar","Pappu","Poriyal"] }},
+      ]
+    }
+  },
+  // --- TELANGANA ---
+  {
+    name: "Bathukamma",
+    states: ["Telangana"],
+    startDate: "2026-10-02",
+    endDate: "2026-10-10",
+    peakDay: "2026-10-10",
+    greeting: "Bathukamma Panduga Subhakankshalu!",
+    mealPlan: {
+      type: "pattern",
+      pattern: ["simple","simple","simple","medium","medium","medium","heavy","heavy","grand"],
+      templates: {
+        simple: { lunch: ["Rice","Pappu","Poriyal","Perugu"] },
+        medium: { lunch: ["Rice","Sambar","Pappu","Pulihora","Poriyal"] },
+        heavy:  { lunch: ["Rice","Sambar","Pappu","Pulihora","Gutti Vankaya","Payasam"] },
+        grand:  { lunch: ["Rice","Sambar","Pappu","Pulihora","Bobbatlu","Payasam","Garelu","Ariselu"] },
+      }
+    }
+  },
+  {
+    name: "Bonalu",
+    states: ["Telangana"],
+    startDate: "2026-07-12",
+    endDate: "2026-08-02",
+    peakDay: "2026-07-19",
+    greeting: "Bonalu Panduga Subhakankshalu!",
+    mealPlan: {
+      type: "pattern",
+      pattern: Array(22).fill("simple").fill("medium",7,14).fill("heavy",14,21).fill("grand",21,22),
+      templates: {
+        simple: { lunch: ["Rice","Pappu","Poriyal","Perugu"] },
+        medium: { lunch: ["Rice","Sambar","Pappu","Poriyal","Pulihora"] },
+        heavy:  { lunch: ["Rice","Sambar","Pappu","Bonam Prasadam","Pulihora","Payasam"] },
+        grand:  { lunch: ["Special Bonam Rice","Sambar","Pappu","Pulihora","Garelu","Payasam","Bobbatlu"] },
+      }
+    }
+  },
+];
+
+// ---------- Regional Meal Catalog (expanded for South Indian states) ----------
+const REGIONAL_MEALS = {
+  Kerala: {
+    breakfast: [
+      { name: "Idli", simple: true },
+      { name: "Dosa", simple: true },
+      { name: "Upma", simple: true },
+      { name: "Puttu + Kadala", simple: true },
+      { name: "Bread + Egg", simple: true },
+      { name: "Appam + Stew", simple: false },
+      { name: "Idiyappam + Egg Curry", simple: false },
+      { name: "Pathiri + Chicken Curry", simple: false },
+    ],
+    lunch: [
+      { name: "Rice + Sambar + Thoran", simple: true },
+      { name: "Fish Curry Meals", simple: false },
+      { name: "Moru Curry Meals", simple: true },
+      { name: "Dal Meals", simple: true },
+      { name: "Avial Meals", simple: false },
+      { name: "Kootu Curry Meals", simple: false },
+    ],
+    dinner: [
+      { name: "Chapati + Curry", simple: true },
+      { name: "Light meals", simple: true },
+      { name: "Leftovers", simple: true },
+      { name: "Porridge + Side", simple: true },
+    ],
+  },
+  "Tamil Nadu": {
+    breakfast: [
+      { name: "Idli + Sambar", simple: true },
+      { name: "Dosa + Chutney", simple: true },
+      { name: "Pongal + Vada", simple: false },
+      { name: "Upma", simple: true },
+      { name: "Poori + Masala", simple: false },
+      { name: "Rava Dosa", simple: true },
+    ],
+    lunch: [
+      { name: "Rice + Sambar + Rasam + Poriyal", simple: true },
+      { name: "Curd Rice + Pickle", simple: true },
+      { name: "Variety Rice (Puliyodarai/Lemon)", simple: true },
+      { name: "Kootu + Rice", simple: true },
+      { name: "Fish Kulambu Meals", simple: false },
+    ],
+    dinner: [
+      { name: "Chapati + Kurma", simple: true },
+      { name: "Idli/Dosa (light)", simple: true },
+      { name: "Parotta + Salna", simple: false },
+    ],
+  },
+  "Andhra Pradesh": {
+    breakfast: [
+      { name: "Pesarattu + Ginger Chutney", simple: true },
+      { name: "Idli + Peanut Chutney", simple: true },
+      { name: "Upma + Pickle", simple: true },
+      { name: "Dosa + Sambar", simple: true },
+      { name: "Poori + Curry", simple: false },
+    ],
+    lunch: [
+      { name: "Rice + Pappu + Poriyal", simple: true },
+      { name: "Rice + Sambar + Rasam + Fryums", simple: true },
+      { name: "Pulihora + Perugu", simple: true },
+      { name: "Gutti Vankaya Meals", simple: false },
+      { name: "Gongura Chicken Meals", simple: false },
+    ],
+    dinner: [
+      { name: "Chapati + Dal Fry", simple: true },
+      { name: "Pesarattu", simple: true },
+      { name: "Rice + Rasam", simple: true },
+    ],
+  },
+  "Telangana": {
+    breakfast: [
+      { name: "Pesarattu + Upma", simple: true },
+      { name: "Idli + Palli Chutney", simple: true },
+      { name: "Dosa + Sambar", simple: true },
+      { name: "Poori + Aloo Curry", simple: false },
+      { name: "Sakinalu + Tea", simple: true },
+    ],
+    lunch: [
+      { name: "Rice + Pappu + Poriyal + Perugu", simple: true },
+      { name: "Rice + Pulusu + Vepudu", simple: true },
+      { name: "Jonna Rotte + Natu Kodi Pulusu", simple: false },
+      { name: "Pulihora + Perugu", simple: true },
+      { name: "Sarva Pindi Meals", simple: false },
+    ],
+    dinner: [
+      { name: "Chapati + Dal", simple: true },
+      { name: "Ragi Sangati + Natukodi", simple: false },
+      { name: "Rice + Rasam + Pickle", simple: true },
+    ],
+  },
+};

@@ -1,620 +1,529 @@
-/* Pachaka Lokam v0.6 */
-const STORAGE_KEY = "pl_state_v4";
-const uid = () => Math.random().toString(36).slice(2, 10);
-const cap = s => s[0].toUpperCase() + s.slice(1);
-const isoWeek = d => { const x=new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate()+4-(x.getDay()||7));
-  const y=new Date(x.getFullYear(),0,1); return `${x.getFullYear()}-W${String(Math.ceil(((x-y)/86400000+1)/7)).padStart(2,"0")}`; };
-const todayKey = () => new Date().toISOString().slice(0,10);
-const monthKey = () => new Date().toISOString().slice(0,7);
-const fmtDate = d => new Date(d).toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short"});
+/* Pachaka Lokam — offline-first controller.
+ * State shape (localStorage key: "pl_state" v1):
+ *   { grocery: [{id,name,category,qty,checked,seasonal}],
+ *     plans:   { "YYYY-MM-DD": {breakfast,lunch,dinner} },
+ *     reminders:[{id,title,frequency,time,active}],
+ *     notifiedDates: { "<remId>": "YYYY-MM-DD" } }
+ */
 
+const STORAGE_KEY = "pl_state_v2";
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+// ---------- Store ----------
 const Store = {
   state: null,
   load() {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) { try { this.state = JSON.parse(raw); this.migrate(); return; } catch {} }
-    ["pl_state_v1","pl_state_v2","pl_state_v3"].forEach(k => localStorage.removeItem(k));
-    const items = [];
+    if (raw) {
+      try { this.state = JSON.parse(raw); return; } catch {}
+    }
+    // First run — seed from data.js
+    const grocery = [];
     GROCERY_SEED.forEach(g => {
       const seasonal = g.category.includes("Seasonal");
-      g.items.forEach(([name, u]) => items.push({ id: uid(), name, category: g.category,
-        unit: u.unit, qty: 0, step: u.step, defaultQty: u.defaultQty, needsBuy: false, seasonal }));
+      g.items.forEach(name =>
+        grocery.push({ id: uid(), name, category: g.category, qty: 0, checked: false, seasonal })
+      );
     });
-    this.state = { items, plans: {}, reminders: REMINDER_SEED.map(r => ({ id: uid(), ...r })),
-      notifiedDates: {}, settings: { beverage: "tea" }, template: null, templateDismissedWeek: null,
-      tracker: { maid: {}, milk: {} } };
+    const reminders = REMINDER_SEED.map(r => ({ id: uid(), ...r }));
+    this.state = {
+      grocery, plans: {}, reminders, notifiedDates: {},
+      region: "Kerala",           // Default region; user can change
+      festivalMode: "override",   // "override" | "regular" | "hybrid"
+      festivalNotifScheduled: false,
+    };
     this.save();
-  },
-  migrate() {
-    this.state.settings ||= { beverage: "tea" };
-    this.state.settings.beverage ||= "tea";
-    this.state.template ||= null;
-    this.state.templateDismissedWeek ||= null;
-    this.state.tracker ||= { maid: {}, milk: {} };
-    this.state.tracker.maid ||= {};
-    this.state.tracker.milk ||= {};
   },
   save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state)); },
 };
 
-// ===== TAB NAVIGATION =====
+// ---------- State migration (v1 -> v2) ----------
+(function migrateState() {
+  if (!Store.state) return;
+  if (!Store.state.region) Store.state.region = "Kerala";
+  if (!Store.state.festivalMode) Store.state.festivalMode = "override";
+  if (Store.state.festivalNotifScheduled === undefined) Store.state.festivalNotifScheduled = false;
+  Store.save();
+})();
+
+// ---------- Festival Service ----------
+const FestivalService = {
+  /** Get all festivals matching user's selected region */
+  getRegionalFestivals() {
+    const region = Store.state.region || "Kerala";
+    return FESTIVAL_DATA.filter(f => f.states.includes(region));
+  },
+
+  /** Find the currently active festival (if any) for the user's region */
+  getActiveFestival() {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    return this.getRegionalFestivals().find(f => {
+      const start = new Date(f.startDate + "T00:00:00");
+      const end   = new Date(f.endDate   + "T23:59:59");
+      return today >= start && today <= end;
+    }) || null;
+  },
+
+  /** Zero-based day offset within the festival */
+  getDayIndex(festival) {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const start = new Date(festival.startDate + "T00:00:00");
+    return Math.floor((today - start) / (1000 * 60 * 60 * 24));
+  },
+
+  /** Total duration of the festival in days */
+  getDuration(festival) {
+    const s = new Date(festival.startDate + "T00:00:00");
+    const e = new Date(festival.endDate   + "T00:00:00");
+    return Math.floor((e - s) / (1000 * 60 * 60 * 24)) + 1;
+  },
+
+  /** Resolve today's meal plan from the festival */
+  getFestivalMealPlan(festival) {
+    if (!festival) return null;
+    const dayIndex = this.getDayIndex(festival);
+
+    if (festival.mealPlan.type === "progressive") {
+      const day = festival.mealPlan.days.find(d => d.dayOffset === dayIndex);
+      return day ? { ...day.meals, _title: day.title } : null;
+    }
+
+    if (festival.mealPlan.type === "pattern") {
+      const key = festival.mealPlan.pattern[dayIndex];
+      return key ? festival.mealPlan.templates[key] : null;
+    }
+
+    // Static "festival" type
+    return festival.mealPlan.meals || null;
+  },
+
+  /** Is today the peak day? */
+  isPeakDay(festival) {
+    const today = new Date().toISOString().slice(0, 10);
+    return festival.peakDay === today;
+  },
+
+  /** Next upcoming festival (for countdown) */
+  getNextFestival() {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const upcoming = this.getRegionalFestivals()
+      .filter(f => new Date(f.startDate + "T00:00:00") > today)
+      .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+    return upcoming[0] || null;
+  },
+
+  /** Days until a festival starts */
+  daysUntil(festival) {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const start = new Date(festival.startDate + "T00:00:00");
+    return Math.ceil((start - today) / (1000 * 60 * 60 * 24));
+  },
+};
+
+// ---------- Tabs ----------
 document.querySelectorAll(".tab").forEach(t => {
   t.onclick = () => {
     document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
     document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
     t.classList.add("active");
     document.getElementById(t.dataset.tab).classList.add("active");
-    if (t.dataset.tab === "today") renderToday();
-    if (t.dataset.tab === "grocery") renderGrocery();
-    if (t.dataset.tab === "kitchen") renderKitchen();
-    if (t.dataset.tab === "meals") renderMealsTab();
-    if (t.dataset.tab === "reminders") { renderReminders(); renderTracker(); }
   };
 });
 
-// ===== TODAY'S MEAL PLAN =====
-function renderToday() {
-  const key = todayKey();
-  const p = pantry();
-  const bev = Store.state.settings.beverage;
-  const today = new Date();
-  document.getElementById("today-date").textContent =
-    today.toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
-
-  // Check if we have a saved plan for today
-  const saved = Store.state.plans[key];
-  const slots = [
-    { id:"breakfast", icon:"🌅", label:"Breakfast" },
-    { id:"lunch",     icon:"🍛", label:"Lunch" },
-    { id:"tea",       icon:"☕", label:"Evening Tea" },
-    { id:"dinner",    icon:"🌙", label:"Dinner" },
-  ];
-
-  slots.forEach(({ id, icon, label }) => {
-    const card = document.getElementById(`today-${id}`);
-    const saved_meal = saved && saved[id];
-    const options = allCookable(id, p, bev);
-    const current = saved_meal ? saved_meal.name : null;
-
-    // Build dropdown
-    const sel = card.querySelector("select");
-    sel.innerHTML = options.map(o =>
-      `<option value="${o.name}" ${o.name===current?"selected":""}>${o.display}${o.fullyCookable?"":" ⚠"}</option>`
-    ).join("") || `<option>— nothing available —</option>`;
-
-    // Show display text
-    const disp = card.querySelector(".today-meal-display");
-    if (saved_meal && saved_meal.display) {
-      disp.textContent = saved_meal.display;
-      disp.className = "today-meal-display set";
-    } else if (options.length) {
-      disp.textContent = options[0].display + (options[0].fullyCookable ? "" : " ⚠");
-      disp.className = "today-meal-display suggestion";
-    } else {
-      disp.textContent = "No suggestion — stock basics";
-      disp.className = "today-meal-display empty";
-    }
-
-    // Show missing badge
-    const miss = card.querySelector(".today-missing");
-    if (saved_meal && saved_meal.missing && saved_meal.missing.length) {
-      miss.textContent = "needs: " + saved_meal.missing.join(", ");
-      miss.style.display = "inline-block";
-    } else miss.style.display = "none";
-
-    // Wire select change
-    sel.onchange = () => {
-      const rule = MEAL_RULES[id].find(r => r.name === sel.value);
-      const cooked = rule ? tryCook(rule, p, false) : null;
-      if (!cooked) return;
-      Store.state.plans[key] ||= {};
-      Store.state.plans[key][id] = { name: cooked.name, display: cooked.display, missing: cooked.missing };
-      Store.save();
-      renderToday();
-    };
-  });
-}
-
-document.getElementById("btn-today-from-template").onclick = () => {
-  const key = todayKey();
-  const tpl = Store.state.template;
-  const p = pantry(), bev = Store.state.settings.beverage;
-  if (!tpl) { alert("No weekly template saved yet. Go to Meal Plan tab, generate and save a template first."); return; }
-  const dow = new Date().getDay();
-  const dayPlan = tpl[dow];
-  if (!dayPlan) { alert("No template entry for today. Try generating a new plan."); return; }
-  Store.state.plans[key] = {};
-  for (const slot of ["breakfast","lunch","tea","dinner"]) {
-    const want = dayPlan[slot]; if (!want) continue;
-    const rule = MEAL_RULES[slot].find(m => m.name === want.name);
-    const cooked = rule ? tryCook(rule, p, true) : null;
-    if (cooked) Store.state.plans[key][slot] = { name: cooked.name, display: cooked.display, missing: [] };
-    else {
-      const opts = allCookable(slot, p, bev).filter(c => c.fullyCookable);
-      const sub = opts[0];
-      Store.state.plans[key][slot] = sub
-        ? { name: sub.name, display: sub.display + " ↺", missing: [] }
-        : { name: want.name, display: want.name + " (missing)", missing: ["ingredients"] };
-    }
-  }
-  Store.save(); renderToday();
-};
-
-document.getElementById("btn-today-suggest").onclick = () => {
-  const key = todayKey();
-  const p = pantry(), bev = Store.state.settings.beverage;
-  const recent = { breakfast:[], lunch:[], tea:[], dinner:[] };
-  const meals = {};
-  for (const slot of ["breakfast","lunch","tea","dinner"]) {
-    const pick = pickMeal(slot, p, recent[slot], bev);
-    meals[slot] = pick
-      ? { name: pick.name, display: pick.display, missing: pick.missing }
-      : { name: null, display: "No suggestion — stock basics", missing: [] };
-    if (pick) recent[slot].push(pick.name);
-  }
-  Store.state.plans[key] = meals;
-  Store.save(); renderToday();
-};
-
-// ===== KITCHEN =====
-function renderKitchen() {
-  const root = document.getElementById("kitchen-groups"); root.innerHTML = "";
-  const groups = {};
-  Store.state.items.forEach(it => { (groups[it.category] ||= []).push(it); });
-  Object.entries(groups).forEach(([cat, items]) => {
-    const stocked = items.filter(i => i.qty > 0), empty = items.filter(i => i.qty === 0);
-    const div = document.createElement("div"); div.className = "category";
-    div.innerHTML = `<h3>${cat} <span class="count">${stocked.length}/${items.length} stocked</span></h3>
-      <div class="items stocked-grid"></div>
-      ${empty.length ? `<details><summary>Not in kitchen (${empty.length})</summary><div class="items empty-grid"></div></details>` : ""}`;
-    const sBox = div.querySelector(".stocked-grid"), eBox = div.querySelector(".empty-grid");
-    stocked.forEach(it => {
-      const el = document.createElement("div"); el.className = "item stocked";
-      el.innerHTML = `<span class="name">${it.name}</span>
-        <input type="number" class="qty" value="${it.qty}" min="0" step="${it.step}" />
-        <span class="unit">${it.unit}</span><button class="btn xs">Out</button>`;
-      const [, qty, , out] = el.children;
-      qty.onchange = () => { const v=parseFloat(qty.value)||0; it.qty=v; if(v===0) it.needsBuy=true; Store.save(); renderKitchen(); };
-      out.onclick = () => { it.qty=0; it.needsBuy=true; Store.save(); renderKitchen(); };
-      sBox.appendChild(el);
-    });
-    if (eBox) empty.forEach(it => {
-      const el = document.createElement("div"); el.className = "item empty";
-      el.innerHTML = `<span class="name">${it.name}</span><span class="unit">${it.unit}</span>
-        <button class="btn xs primary">Got it</button><button class="btn xs">+ Buy</button>`;
-      const [, , got, buy] = el.children;
-      got.onclick = () => { it.qty=it.defaultQty; it.needsBuy=false; Store.save(); renderKitchen(); };
-      buy.onclick = () => { it.needsBuy=true; Store.save(); renderKitchen(); };
-      eBox.appendChild(el);
-    });
-    root.appendChild(div);
-  });
-}
-document.getElementById("btn-reset-month").onclick = () => {
-  if (!confirm("Reset month?")) return;
-  Store.state.items.forEach(it => { it.qty=0; it.needsBuy=true; });
-  Store.save(); renderKitchen();
-};
-
-// ===== GROCERY =====
+// ---------- Grocery ----------
 function renderGrocery() {
-  const root = document.getElementById("grocery-list"); root.innerHTML = "";
-  const toBuy = Store.state.items.filter(i => i.needsBuy);
-  if (!toBuy.length) { root.innerHTML = `<p class="hint">Nothing to buy.</p>`; return; }
-  const groups = {}; toBuy.forEach(it => { (groups[it.category] ||= []).push(it); });
+  const root = document.getElementById("grocery-groups");
+  root.innerHTML = "";
+  const groups = {};
+  Store.state.grocery.forEach(it => { (groups[it.category] ||= []).push(it); });
+
   Object.entries(groups).forEach(([cat, items]) => {
-    const div = document.createElement("div"); div.className = "category";
-    div.innerHTML = `<h3>${cat} <span class="count">${items.length}</span></h3><div class="items"></div>`;
+    const div = document.createElement("div");
+    div.className = "category";
+    div.innerHTML = `<h3>${cat}</h3><div class="items"></div>`;
     const box = div.querySelector(".items");
     items.forEach(it => {
-      const el = document.createElement("div"); el.className = "item";
-      el.innerHTML = `<span class="name">${it.name}</span>
-        <input type="number" class="qty" value="${it.defaultQty}" min="0" step="${it.step}" />
-        <span class="unit">${it.unit}</span><button class="btn xs primary">Bought</button>`;
-      const [, qty, , buy] = el.children;
-      buy.onclick = () => { it.qty=parseFloat(qty.value)||it.defaultQty; it.needsBuy=false; Store.save(); renderGrocery(); };
+      const el = document.createElement("label");
+      el.className = "item" + (it.checked ? " checked" : "");
+      el.innerHTML = `
+        <input type="checkbox" ${it.checked ? "checked" : ""} />
+        <span class="name">${it.name}</span>
+        <input type="number" class="qty" value="${it.qty || ""}" placeholder="qty" min="0" />
+      `;
+      const [cb, , qty] = el.children;
+      cb.onchange = () => {
+        it.checked = cb.checked;
+        el.classList.toggle("checked", it.checked);
+        Store.save();
+      };
+      qty.onchange = () => { it.qty = parseFloat(qty.value) || 0; Store.save(); };
       box.appendChild(el);
     });
     root.appendChild(div);
   });
 }
 
-// ===== PANTRY MATCHING =====
-function pantry() { return new Set(Store.state.items.filter(i => i.qty > 0).map(i => i.name.toLowerCase())); }
-function has(token, p) {
-  const t = token.toLowerCase();
-  if (t === "coconut") return p.has("coconut");
-  if (t === "coconut oil") return p.has("coconut oil");
-  if (t === "coconut milk") return p.has("coconut milk");
-  for (const x of p) if (x.includes(t)) return true;
-  return false;
-}
-function pickAll(list, p)   { return list.filter(x => has(x, p)); }
-function pickFirst(list, p) { return list.find(x => has(x, p)); }
+document.getElementById("btn-add-item").onclick = () => {
+  const name = document.getElementById("g-name").value.trim();
+  const category = document.getElementById("g-cat").value.trim() || "Other";
+  if (!name) return;
+  Store.state.grocery.push({ id: uid(), name, category, qty: 0, checked: false, seasonal: false });
+  Store.save();
+  document.getElementById("g-name").value = "";
+  document.getElementById("g-cat").value = "";
+  renderGrocery();
+};
 
-// ===== MEAL ENGINE =====
-function resolveCurry(p) {
-  for (const cu of DINNER_CURRIES) {
-    if (!cu.needs.every(n => has(n, p))) continue;
-    if (cu.minFrom) { const m = pickAll(cu.minFrom, p);
-      if (m.length < cu.minCount) continue;
-      return cu.render ? cu.render(m.map(cap)) : cu.name; }
-    return cu.render ? cu.render([]) : cu.name;
-  }
-  return null;
-}
-function tryCook(meal, p, strict = true) {
-  const missing = meal.base.filter(b => !has(b, p));
-  if (strict && missing.length) return null;
-  const ctx = { matched: [], missing: [...missing] };
-  if (meal.minFrom) {
-    ctx.matched = pickAll(meal.minFrom, p);
-    if (ctx.matched.length < meal.minCount) {
-      if (strict) return null;
-      ctx.missing.push(`${meal.minCount - ctx.matched.length} more ${meal.name.toLowerCase().includes("sambar")?"veg":"item(s)"}`);
-    }
-  }
-  if (meal.withThoran) { const v = pickFirst(THORAN_VEG, p); ctx.thoran = v ? `${cap(v)} Thoran` : null; }
-  if (meal.withCurry) { const c = resolveCurry(p); if (!c) { if (strict) return null; ctx.missing.push("curry ingredients"); } ctx.curry = c || "Curry"; }
-  const display = meal.render ? meal.render(ctx) : meal.name;
-  return { name: meal.name, type: meal.type, display, simple: meal.simple, special: meal.special, missing: ctx.missing };
-}
+document.getElementById("btn-reset-month").onclick = () => {
+  if (!confirm("Reset all checks and quantities for the new month?")) return;
+  Store.state.grocery.forEach(it => { it.checked = false; it.qty = 0; });
+  Store.save();
+  renderGrocery();
+};
 
-function pickMeal(slot, p, recent, bev) {
-  let pool = MEAL_RULES[slot];
-  if (slot === "tea") {
-    pool = pool.filter(m => !m.beverage || m.beverage === "either" || bev === "either" || m.beverage === bev);
-    pool = pool.filter(m => !m.blackFallback || !has("milk", p));
-  }
-  let cookable = pool.map(m => tryCook(m, p, true)).filter(Boolean).filter(c => !recent.includes(c.name));
-  if (!cookable.length) cookable = pool.map(m => tryCook(m, p, true)).filter(Boolean);
-  if (!cookable.length) {
-    cookable = pool.map(m => {
-      const c = tryCook(m, p, false); if (!c) return null;
-      const total = m.base.length || 1;
-      const have = total - m.base.filter(b => !has(b, p)).length;
-      return (have / total) >= 0.5 ? c : null;
-    }).filter(Boolean);
-  }
-  if (!cookable.length) return null;
-  if (slot === "lunch") {
-    const specials = cookable.filter(c => c.special);
-    if (specials.length && Math.random() < 0.15) return specials[Math.floor(Math.random()*specials.length)];
-  }
-  const normal = cookable.filter(c => !c.special);
-  const cand = normal.length ? normal : cookable;
-  const simple = cand.filter(c => c.simple);
-  const pool2 = (simple.length && Math.random() < 0.8) ? simple : cand;
-  return pool2[Math.floor(Math.random()*pool2.length)];
-}
-
-function allCookable(slot, p, bev) {
-  let pool = MEAL_RULES[slot];
-  if (slot === "tea") pool = pool.filter(m => !m.beverage || m.beverage === "either" || bev === "either" || m.beverage === bev);
-  return pool.map(m => tryCook(m, p, false)).filter(Boolean).map(c => ({
-    ...c, fullyCookable: c.missing.length === 0
-  })).sort((a,b) => a.missing.length - b.missing.length);
+// ---------- Meal Plan (Region-aware + Festival override) ----------
+function getActiveMealCatalog() {
+  const region = Store.state.region || "Kerala";
+  return REGIONAL_MEALS[region] || REGIONAL_MEALS["Kerala"] || MEAL_CATALOG;
 }
 
 function generatePlan(startDate, days = 7) {
-  const p = pantry(), bev = Store.state.settings.beverage, plan = [];
-  const recent = { breakfast:[], lunch:[], tea:[], dinner:[] };
+  const plan = [];
+  const catalog = getActiveMealCatalog();
+  const recent = { breakfast: [], lunch: [], dinner: [] };
+  const mode = Store.state.festivalMode || "override";
+
   for (let i = 0; i < days; i++) {
-    const d = new Date(startDate); d.setDate(d.getDate()+i);
-    const key = d.toISOString().slice(0,10); const meals = {};
-    for (const slot of ["breakfast","lunch","tea","dinner"]) {
-      const pick = pickMeal(slot, p, recent[slot].slice(-2), bev);
-      meals[slot] = pick ? { name: pick.name, display: pick.display, missing: pick.missing }
-                         : { name: null, display: "No suggestion — stock basics", missing: ["any ingredients"] };
-      if (pick) recent[slot].push(pick.name);
-    }
-    Store.state.plans[key] = meals; plan.push({ date: key, meals });
-  }
-  Store.save(); return plan;
-}
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
 
-// ===== MEALS TAB =====
-let editMode = false;
+    // Check for active festival on this date
+    let festivalMeal = null;
+    let festivalInfo = null;
+    const checkDate = new Date(d);
+    checkDate.setHours(0,0,0,0);
 
-function renderMealsTab() {
-  document.getElementById("bev-select").value = Store.state.settings.beverage;
-  const bannerEl = document.getElementById("template-banner");
-  const tpl = Store.state.template;
-  const thisWeek = isoWeek(new Date());
-  const hasPlanThisWeek = Object.keys(Store.state.plans).some(d => isoWeek(d) === thisWeek);
-  if (tpl && !hasPlanThisWeek && Store.state.templateDismissedWeek !== thisWeek) {
-    bannerEl.style.display = "block";
-  } else bannerEl.style.display = "none";
-  loadExistingPlan();
-}
-
-document.getElementById("bev-select").onchange = e => {
-  Store.state.settings.beverage = e.target.value; Store.save();
-};
-document.getElementById("btn-edit-toggle").onclick = () => {
-  editMode = !editMode;
-  document.getElementById("btn-edit-toggle").textContent = editMode ? "Done" : "Edit Plan";
-  loadExistingPlan();
-};
-document.getElementById("btn-generate").onclick = () => {
-  renderPlan(generatePlan(document.getElementById("plan-start").value, 7));
-};
-document.getElementById("btn-save-template").onclick = () => {
-  const start = document.getElementById("plan-start").value;
-  const tpl = {};
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(start); d.setDate(d.getDate()+i);
-    const key = d.toISOString().slice(0,10);
-    const dow = d.getDay();
-    if (Store.state.plans[key]) tpl[dow] = Store.state.plans[key];
-  }
-  Store.state.template = tpl; Store.save();
-  alert("Weekly template saved.");
-};
-document.getElementById("btn-apply-template").onclick = () => {
-  const tpl = Store.state.template; if (!tpl) return;
-  const start = document.getElementById("plan-start").value;
-  const p = pantry(), bev = Store.state.settings.beverage;
-  const substitutions = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(start); d.setDate(d.getDate()+i);
-    const key = d.toISOString().slice(0,10), dow = d.getDay();
-    const saved = tpl[dow]; if (!saved) continue;
-    const meals = {};
-    for (const slot of ["breakfast","lunch","tea","dinner"]) {
-      const want = saved[slot]; if (!want) continue;
-      const rule = MEAL_RULES[slot].find(m => m.name === want.name);
-      const cooked = rule ? tryCook(rule, p, true) : null;
-      if (cooked) meals[slot] = { name: cooked.name, display: cooked.display, missing: [] };
-      else {
-        const options = allCookable(slot, p, bev).filter(c => c.fullyCookable);
-        const sameType = options.find(o => rule && o.type === rule.type);
-        const sub = sameType || options[0];
-        if (sub) { meals[slot] = { name: sub.name, display: sub.display + " ↺", missing: [] };
-          substitutions.push(`${new Date(key).toLocaleDateString(undefined,{weekday:"short"})} ${slot}: ${want.name} → ${sub.name}`); }
-        else meals[slot] = { name: null, display: want.name + " (missing)", missing: ["ingredients"] };
+    for (const f of (FESTIVAL_DATA || [])) {
+      if (!f.states.includes(Store.state.region || "Kerala")) continue;
+      const fs = new Date(f.startDate + "T00:00:00");
+      const fe = new Date(f.endDate + "T23:59:59");
+      if (checkDate >= fs && checkDate <= fe) {
+        festivalInfo = f;
+        const dayIdx = Math.floor((checkDate - fs) / (1000*60*60*24));
+        if (f.mealPlan.type === "progressive") {
+          const dayEntry = f.mealPlan.days.find(dd => dd.dayOffset === dayIdx);
+          festivalMeal = dayEntry ? dayEntry.meals : null;
+        } else if (f.mealPlan.type === "pattern") {
+          const tplKey = f.mealPlan.pattern[dayIdx];
+          festivalMeal = tplKey ? f.mealPlan.templates[tplKey] : null;
+        } else {
+          festivalMeal = f.mealPlan.meals;
+        }
+        break;
       }
     }
+
+    const meals = {};
+    const isFestival = festivalMeal && mode !== "regular";
+
+    for (const mt of ["breakfast", "lunch", "dinner"]) {
+      if (isFestival && festivalMeal[mt]) {
+        meals[mt] = festivalMeal[mt].join(", ");
+      } else {
+        // Regular generation with 80% simple rule
+        const pool = catalog[mt] || MEAL_CATALOG[mt] || [];
+        const avail = pool.filter(m => !recent[mt].slice(-2).includes(m.name));
+        const use = avail.length ? avail : pool;
+        const simple = use.filter(m => m.simple);
+        const pick = (simple.length && Math.random() < 0.8)
+          ? simple[Math.floor(Math.random() * simple.length)]
+          : use[Math.floor(Math.random() * use.length)];
+        if (pick) { recent[mt].push(pick.name); meals[mt] = pick.name; }
+        else { meals[mt] = "-"; }
+      }
+    }
+
+    const entry = { date: key, meals };
+    if (isFestival) {
+      entry.festival = festivalInfo.name;
+      entry.greeting = festivalInfo.greeting;
+    }
     Store.state.plans[key] = meals;
+    plan.push(entry);
   }
-  Store.state.templateDismissedWeek = isoWeek(new Date());
   Store.save();
-  if (substitutions.length) alert("Applied with substitutions:\n\n" + substitutions.join("\n"));
-  renderMealsTab();
-};
-document.getElementById("btn-dismiss-template").onclick = () => {
-  Store.state.templateDismissedWeek = isoWeek(new Date()); Store.save(); renderMealsTab();
+  return plan;
+}
+
+function renderPlan(plan) {
+  const grid = document.getElementById("plan-grid");
+  grid.innerHTML = "";
+  plan.forEach(d => {
+    const card = document.createElement("div");
+    card.className = d.festival ? "day-card festival-day" : "day-card";
+    const label = new Date(d.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    const festBadge = d.festival
+      ? `<div class="fest-badge">${d.festival}</div>`
+      : "";
+    card.innerHTML = `
+      ${festBadge}
+      <h4>${label}</h4>
+      <div class="meal-row"><b>Breakfast</b>${d.meals.breakfast || "-"}</div>
+      <div class="meal-row"><b>Lunch</b>${d.meals.lunch || "-"}</div>
+      <div class="meal-row"><b>Dinner</b>${d.meals.dinner || "-"}</div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+document.getElementById("plan-start").value = new Date().toISOString().slice(0, 10);
+document.getElementById("btn-generate").onclick = () => {
+  const start = document.getElementById("plan-start").value;
+  renderPlan(generatePlan(start, 7));
 };
 
 function loadExistingPlan() {
   const start = document.getElementById("plan-start").value;
   const plan = [];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(start); d.setDate(d.getDate()+i);
-    const key = d.toISOString().slice(0,10);
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
     if (Store.state.plans[key]) plan.push({ date: key, meals: Store.state.plans[key] });
   }
   if (plan.length) renderPlan(plan);
-  else { document.getElementById("plan-grid").innerHTML = ""; document.getElementById("missing-panel").style.display = "none"; }
 }
 
-function renderPlan(plan) {
-  const grid = document.getElementById("plan-grid"); grid.innerHTML = "";
-  const p = pantry(), bev = Store.state.settings.beverage;
-  const missingSet = new Set();
-  plan.forEach(d => {
-    const card = document.createElement("div"); card.className = "day-card";
-    const label = new Date(d.date).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
-    let html = `<h4>${label}</h4>`;
-    for (const [slot, icon] of [["breakfast","🌅"],["lunch","🍛"],["tea","☕"],["dinner","🌙"]]) {
-      const m = d.meals[slot] || {};
-      (m.missing||[]).forEach(x => {
-        const tok = x.toLowerCase();
-        if (tok.includes(" ")) return;
-        const item = Store.state.items.find(i => i.name.toLowerCase() === tok);
-        if (item && !item.needsBuy && item.qty === 0) missingSet.add(item.id);
-      });
-      if (editMode) {
-        const opts = allCookable(slot, p, bev);
-        const sel = opts.map(o => `<option value="${o.name}" ${m.name===o.name?"selected":""}>${o.display}${o.fullyCookable?"":" ⚠"}</option>`).join("");
-        html += `<div class="meal-row"><b>${icon} ${slot}</b>
-          <select data-date="${d.date}" data-slot="${slot}">${sel || `<option>—</option>`}</select></div>`;
-      } else {
-        const miss = (m.missing||[]).length ? `<span class="miss">needs: ${m.missing.join(", ")}</span>` : "";
-        html += `<div class="meal-row${m.missing?.length?" partial":""}"><b>${icon} ${slot}</b>${m.display || "—"}${miss}</div>`;
-      }
-    }
-    card.innerHTML = html; grid.appendChild(card);
-  });
-  if (editMode) grid.querySelectorAll("select").forEach(s => {
-    s.onchange = () => {
-      const rule = MEAL_RULES[s.dataset.slot].find(r => r.name === s.value);
-      const cooked = rule ? tryCook(rule, p, false) : null;
-      if (cooked) Store.state.plans[s.dataset.date][s.dataset.slot] = { name: cooked.name, display: cooked.display, missing: cooked.missing };
-      Store.save();
-    };
-  });
-  renderMissingPanel(missingSet);
-  document.getElementById("btn-save-template").style.display = plan.length ? "inline-block" : "none";
-}
-
-function renderMissingPanel(idSet) {
-  const panel = document.getElementById("missing-panel");
-  const list = document.getElementById("missing-list");
-  if (!idSet.size) { panel.style.display = "none"; return; }
-  panel.style.display = "block"; list.innerHTML = "";
-  [...idSet].forEach(id => {
-    const it = Store.state.items.find(i => i.id === id); if (!it) return;
-    const chip = document.createElement("span"); chip.className = "chip";
-    chip.innerHTML = `${it.name} <button title="Approve">✓</button><button title="Dismiss">✗</button>`;
-    const [ok, no] = chip.querySelectorAll("button");
-    ok.onclick = () => { it.needsBuy = true; Store.save(); chip.remove(); if (!list.children.length) panel.style.display = "none"; };
-    no.onclick = () => { chip.remove(); if (!list.children.length) panel.style.display = "none"; };
-    list.appendChild(chip);
-  });
-}
-document.getElementById("btn-approve-all").onclick = () => {
-  document.querySelectorAll("#missing-list .chip button[title=Approve]").forEach(b => b.click());
-};
-
-document.getElementById("plan-start").value = new Date().toISOString().slice(0,10);
-
-// ===== REMINDERS =====
+// ---------- Reminders ----------
 function renderReminders() {
-  const root = document.getElementById("reminder-list"); root.innerHTML = "";
+  const root = document.getElementById("reminder-list");
+  root.innerHTML = "";
   Store.state.reminders.forEach(r => {
-    const el = document.createElement("div"); el.className = "rem" + (r.active?"":" off");
-    el.innerHTML = `<div><b>${r.title}</b><div class="meta">${r.frequency}${r.time?" · "+r.time:""}</div></div>
-      <div class="actions"><button class="btn">${r.active?"Pause":"Resume"}</button>
-      <button class="btn" style="color:#c0392b">Delete</button></div>`;
-    const [tg, dl] = el.querySelectorAll("button");
-    tg.onclick = () => { r.active = !r.active; Store.save(); renderReminders(); };
-    dl.onclick = () => { Store.state.reminders = Store.state.reminders.filter(x=>x.id!==r.id); Store.save(); renderReminders(); };
+    const el = document.createElement("div");
+    el.className = "rem" + (r.active ? "" : " off");
+    el.innerHTML = `
+      <div>
+        <b>${r.title}</b>
+        <div class="meta">${r.frequency}${r.time ? " · " + r.time : ""}</div>
+      </div>
+      <div class="actions">
+        <button class="btn">${r.active ? "Pause" : "Resume"}</button>
+        <button class="btn" style="color:#c0392b">Delete</button>
+      </div>
+    `;
+    const [toggle, del] = el.querySelectorAll("button");
+    toggle.onclick = () => { r.active = !r.active; Store.save(); renderReminders(); };
+    del.onclick = () => {
+      Store.state.reminders = Store.state.reminders.filter(x => x.id !== r.id);
+      Store.save(); renderReminders();
+    };
     root.appendChild(el);
   });
 }
+
 document.getElementById("btn-add-rem").onclick = () => {
-  const title = document.getElementById("r-title").value.trim(); if (!title) return;
-  Store.state.reminders.push({ id: uid(), title,
+  const title = document.getElementById("r-title").value.trim();
+  if (!title) return;
+  Store.state.reminders.push({
+    id: uid(), title,
     frequency: document.getElementById("r-freq").value,
-    time: document.getElementById("r-time").value || null, active: true });
-  Store.save(); document.getElementById("r-title").value = ""; renderReminders();
-};
-document.getElementById("btn-enable-notif").onclick = async () => {
-  if (!("Notification" in window)) return alert("Not supported.");
-  const res = await Notification.requestPermission();
-  alert(res === "granted" ? "Enabled ✅" : "Permission: " + res);
-};
-
-// ===== REMINDER SUB-TABS =====
-document.querySelectorAll(".rem-tab").forEach(t => {
-  t.onclick = () => {
-    document.querySelectorAll(".rem-tab").forEach(x => x.classList.remove("active"));
-    document.querySelectorAll(".rem-panel").forEach(x => x.classList.remove("active"));
-    t.classList.add("active");
-    document.getElementById(t.dataset.remtab).classList.add("active");
-  };
-});
-
-// ===== TRACKER =====
-let trackerMonth = monthKey();
-
-function renderTracker() {
-  renderTrackerMonth();
-}
-
-function renderTrackerMonth() {
-  const [yr, mo] = trackerMonth.split("-").map(Number);
-  const daysInMonth = new Date(yr, mo, 0).getDate();
-  const today = todayKey();
-
-  document.getElementById("tracker-month-label").textContent =
-    new Date(yr, mo-1, 1).toLocaleDateString("en-IN",{month:"long",year:"numeric"});
-
-  // Stats
-  const maid = Store.state.tracker.maid;
-  const milk = Store.state.tracker.milk;
-  let maidPresent = 0, maidAbsent = 0, milkReceived = 0, milkMissed = 0;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const k = `${trackerMonth}-${String(d).padStart(2,"0")}`;
-    if (maid[k] === "present") maidPresent++;
-    if (maid[k] === "absent")  maidAbsent++;
-    if (milk[k] === "received") milkReceived++;
-    if (milk[k] === "missed")   milkMissed++;
-  }
-  document.getElementById("stat-maid-present").textContent = maidPresent;
-  document.getElementById("stat-maid-absent").textContent  = maidAbsent;
-  document.getElementById("stat-milk-received").textContent = milkReceived;
-  document.getElementById("stat-milk-missed").textContent   = milkMissed;
-
-  // Calendar grid
-  const grid = document.getElementById("tracker-grid");
-  grid.innerHTML = "";
-  // Day headers
-  ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(d => {
-    const h = document.createElement("div");
-    h.className = "cal-header"; h.textContent = d; grid.appendChild(h);
+    time: document.getElementById("r-time").value || null,
+    active: true,
   });
-  // Offset blank cells
-  const firstDow = new Date(yr, mo-1, 1).getDay();
-  for (let i = 0; i < firstDow; i++) {
-    const blank = document.createElement("div"); blank.className = "cal-cell blank"; grid.appendChild(blank);
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    const k = `${trackerMonth}-${String(d).padStart(2,"0")}`;
-    const isToday = k === today;
-    const isFuture = k > today;
-    const cell = document.createElement("div");
-    cell.className = "cal-cell" + (isToday?" today":"") + (isFuture?" future":"");
-
-    const maidVal = maid[k] || "";
-    const milkVal = milk[k] || "";
-
-    cell.innerHTML = `
-      <div class="cal-day">${d}</div>
-      <div class="cal-badges">
-        <button class="badge maid-badge ${maidVal}" data-key="${k}" data-type="maid" title="Toggle maid">
-          ${maidVal === "present" ? "✓ Maid" : maidVal === "absent" ? "✗ Maid" : "· Maid"}
-        </button>
-        <button class="badge milk-badge ${milkVal}" data-key="${k}" data-type="milk" title="Toggle milk">
-          ${milkVal === "received" ? "✓ Milk" : milkVal === "missed" ? "✗ Milk" : "· Milk"}
-        </button>
-      </div>`;
-
-    if (!isFuture) {
-      cell.querySelectorAll(".badge").forEach(btn => {
-        btn.onclick = () => {
-          const type = btn.dataset.type;
-          const key = btn.dataset.key;
-          if (type === "maid") {
-            const cur = Store.state.tracker.maid[key] || "";
-            Store.state.tracker.maid[key] = cur === "" ? "present" : cur === "present" ? "absent" : "";
-            if (Store.state.tracker.maid[key] === "") delete Store.state.tracker.maid[key];
-          } else {
-            const cur = Store.state.tracker.milk[key] || "";
-            Store.state.tracker.milk[key] = cur === "" ? "received" : cur === "received" ? "missed" : "";
-            if (Store.state.tracker.milk[key] === "") delete Store.state.tracker.milk[key];
-          }
-          Store.save(); renderTrackerMonth();
-        };
-      });
-    }
-    grid.appendChild(cell);
-  }
-}
-
-document.getElementById("tracker-prev").onclick = () => {
-  const [yr, mo] = trackerMonth.split("-").map(Number);
-  const d = new Date(yr, mo-2, 1);
-  trackerMonth = d.toISOString().slice(0,7);
-  renderTrackerMonth();
-};
-document.getElementById("tracker-next").onclick = () => {
-  const [yr, mo] = trackerMonth.split("-").map(Number);
-  const d = new Date(yr, mo, 1);
-  trackerMonth = d.toISOString().slice(0,7);
-  renderTrackerMonth();
+  Store.save();
+  document.getElementById("r-title").value = "";
+  renderReminders();
 };
 
-// ===== NOTIFICATION CHECK =====
+// ---------- Notifications ----------
+document.getElementById("btn-enable-notif").onclick = async () => {
+  if (!("Notification" in window)) return alert("Notifications not supported on this device.");
+  const res = await Notification.requestPermission();
+  alert(res === "granted" ? "Notifications enabled ✅" : "Permission: " + res);
+};
+
 function checkReminders() {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const now = new Date(), today = now.toISOString().slice(0,10), hhmm = now.toTimeString().slice(0,5);
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const hhmm = now.toTimeString().slice(0, 5);
   Store.state.reminders.forEach(r => {
-    if (!r.active || !r.time || r.time !== hhmm) return;
+    if (!r.active || !r.time) return;
+    // Daily at exact minute; weekly on same weekday as it was created/today
+    if (r.time !== hhmm) return;
+    // Weekly: only on Mondays for simplicity unless daily/custom
     if (r.frequency === "weekly" && now.getDay() !== 1) return;
-    const stamp = today + "-" + hhmm;
-    if (Store.state.notifiedDates[r.id] === stamp) return;
+    // Avoid double-firing within the same day
+    if (Store.state.notifiedDates[r.id] === today + "-" + hhmm) return;
     new Notification("Pachaka Lokam", { body: r.title, icon: "assets/logo.png" });
-    Store.state.notifiedDates[r.id] = stamp; Store.save();
+    Store.state.notifiedDates[r.id] = today + "-" + hhmm;
+    Store.save();
   });
 }
-setInterval(checkReminders, 30*1000);
+setInterval(checkReminders, 30 * 1000); // check twice a minute
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+// ---------- Service worker (offline) ----------
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
 
+// ---------- Festival Banner + Dashboard ----------
+function renderFestivalBanner() {
+  const banner = document.getElementById("festival-banner");
+  if (!banner) return;
+  const active = FestivalService.getActiveFestival();
+
+  if (active) {
+    const dayIdx  = FestivalService.getDayIndex(active);
+    const total   = FestivalService.getDuration(active);
+    const isPeak  = FestivalService.isPeakDay(active);
+    const pct     = Math.round(((dayIdx + 1) / total) * 100);
+    const meals   = FestivalService.getFestivalMealPlan(active);
+
+    banner.className = "festival-banner active";
+    banner.innerHTML = `
+      <div class="fest-greeting">${active.greeting}</div>
+      <div class="fest-progress">
+        <span>Day ${dayIdx + 1} of ${total}${isPeak ? " — Peak Day!" : ""}</span>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      </div>
+      ${meals ? `<div class="fest-meals">
+        <b>Today's Festival Menu:</b>
+        ${meals.lunch  ? `<div class="fest-dish"><span>Lunch</span>${Array.isArray(meals.lunch) ? meals.lunch.join(", ") : meals.lunch}</div>` : ""}
+        ${meals.breakfast ? `<div class="fest-dish"><span>Breakfast</span>${Array.isArray(meals.breakfast) ? meals.breakfast.join(", ") : meals.breakfast}</div>` : ""}
+        ${meals.dinner ? `<div class="fest-dish"><span>Dinner</span>${Array.isArray(meals.dinner) ? meals.dinner.join(", ") : meals.dinner}</div>` : ""}
+      </div>` : ""}
+    `;
+  } else {
+    const next = FestivalService.getNextFestival();
+    if (next) {
+      const daysLeft = FestivalService.daysUntil(next);
+      banner.className = "festival-banner upcoming";
+      banner.innerHTML = `
+        <div class="fest-upcoming">Next: <b>${next.name}</b> in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}</div>
+      `;
+    } else {
+      banner.className = "festival-banner";
+      banner.innerHTML = "";
+    }
+  }
+}
+
+function renderFestivalPanel() {
+  const list = document.getElementById("festival-list");
+  if (!list) return;
+  const festivals = FestivalService.getRegionalFestivals();
+  list.innerHTML = "";
+  if (!festivals.length) {
+    list.innerHTML = `<p style="color:var(--muted)">No festivals configured for ${Store.state.region}.</p>`;
+    return;
+  }
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  festivals.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+
+  festivals.forEach(f => {
+    const start = new Date(f.startDate + "T00:00:00");
+    const end   = new Date(f.endDate   + "T23:59:59");
+    const isActive = today >= start && today <= end;
+    const isPast   = today > end;
+    const card = document.createElement("div");
+    card.className = "fest-card" + (isActive ? " active" : "") + (isPast ? " past" : "");
+    const duration = FestivalService.getDuration(f);
+    const dateRange = duration === 1
+      ? new Date(f.startDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+      : `${new Date(f.startDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${new Date(f.endDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+    const statusBadge = isActive ? '<span class="badge live">Live</span>'
+      : isPast ? '<span class="badge past">Passed</span>'
+      : `<span class="badge soon">${FestivalService.daysUntil(f)}d away</span>`;
+
+    const mealType = f.mealPlan.type === "pattern" ? "Pattern-based"
+      : f.mealPlan.type === "progressive" ? "Progressive"
+      : "Single-day";
+
+    card.innerHTML = `
+      <div class="fest-card-head">
+        <h4>${f.name}</h4>
+        ${statusBadge}
+      </div>
+      <div class="fest-card-meta">
+        <span>${dateRange}</span> · <span>${duration} day${duration > 1 ? "s" : ""}</span> · <span>${mealType}</span>
+      </div>
+      <div class="fest-card-states">${f.states.join(", ")}</div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+// ---------- Region Selector ----------
+function initRegionSelector() {
+  const sel = document.getElementById("region-select");
+  if (!sel) return;
+  sel.value = Store.state.region || "Kerala";
+  sel.onchange = () => {
+    Store.state.region = sel.value;
+    Store.save();
+    renderFestivalBanner();
+    renderFestivalPanel();
+    // Update meal plan heading
+    const mealHeading = document.querySelector("#meals .toolbar h2");
+    if (mealHeading) mealHeading.textContent = `${sel.value} Meal Plan`;
+  };
+}
+
+// ---------- Festival Mode Toggle ----------
+function initFestivalMode() {
+  const toggle = document.getElementById("festival-mode");
+  if (!toggle) return;
+  toggle.value = Store.state.festivalMode || "override";
+  toggle.onchange = () => {
+    Store.state.festivalMode = toggle.value;
+    Store.save();
+  };
+}
+
+// ---------- Festival Notifications ----------
+function scheduleFestivalNotifications() {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  // Use the existing reminder-check loop — add festival greetings as one-time checks
+  const today = new Date().toISOString().slice(0, 10);
+  const active = FestivalService.getActiveFestival();
+  if (active && FestivalService.isPeakDay(active)) {
+    const notifKey = `fest_${active.name}_${today}`;
+    if (!Store.state.notifiedDates[notifKey]) {
+      new Notification("Pachaka Lokam", {
+        body: active.greeting,
+        icon: "assets/logo.png",
+      });
+      Store.state.notifiedDates[notifKey] = today;
+      Store.save();
+    }
+  }
+}
+
+// Extend existing reminder check to include festival notifications
+const _origCheckReminders = checkReminders;
+checkReminders = function() {
+  _origCheckReminders();
+  scheduleFestivalNotifications();
+};
+
+// ---------- Init ----------
 Store.load();
-renderToday();
-renderKitchen();
+renderGrocery();
+loadExistingPlan();
 renderReminders();
-renderMealsTab();
+renderFestivalBanner();
+renderFestivalPanel();
+initRegionSelector();
+initFestivalMode();
+
+// Update meal heading to show region
+const _mealHeading = document.querySelector("#meals .toolbar h2");
+if (_mealHeading) _mealHeading.textContent = `${Store.state.region || "Kerala"} Meal Plan`;
