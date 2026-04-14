@@ -1,6 +1,6 @@
 // Pachaka Lokam — offline cache.
 // Bump CACHE version whenever shell files change to force refresh.
-const CACHE = "pl-v2";
+const CACHE = "pl-v3";
 const SHELL = [
   "./",
   "index.html",

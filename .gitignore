@@ -1,4 +1,5 @@
 .DS_Store
-.vscode/
-.idea/
+Thumbs.db
 node_modules/
+*.zip
+.env
