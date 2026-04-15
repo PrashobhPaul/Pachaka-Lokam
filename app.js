@@ -1,5 +1,5 @@
-/* Pachaka Lokam v1.0 — expanded: festivals, regions, newspaper, gas cylinder */
-const STORAGE_KEY = "pl_state_v5";
+/* Pachaka Lokam v2.0 — festivals, regions, special days, veg restrictions, buy-suggestions */
+const STORAGE_KEY = "pl_state_v6";
 const uid = () => Math.random().toString(36).slice(2, 10);
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const isoWeek = d => { const x=new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate()+4-(x.getDay()||7));
@@ -14,10 +14,11 @@ const Store = {
   load() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) { try { this.state = JSON.parse(raw); this.migrate(); return; } catch {} }
-    // Try migrate from v4
-    const old = localStorage.getItem("pl_state_v4");
-    if (old) { try { this.state = JSON.parse(old); this.migrate(); this.save(); return; } catch {} }
-    ["pl_state_v1","pl_state_v2","pl_state_v3","pl_state_v4"].forEach(k => localStorage.removeItem(k));
+    // Try migrate from older versions
+    for (const old of ["pl_state_v5","pl_state_v4","pl_state_v3"]) {
+      const d = localStorage.getItem(old);
+      if (d) { try { this.state = JSON.parse(d); this.migrate(); this.save(); return; } catch {} }
+    }
     const items = [];
     GROCERY_SEED.forEach(g => {
       const seasonal = g.category.includes("Seasonal");
@@ -28,7 +29,10 @@ const Store = {
       notifiedDates: {}, settings: { beverage: "tea", region: "Kerala", festivalMode: "override" },
       template: null, templateDismissedWeek: null,
       tracker: { maid: {}, milk: {}, newspaper: {} },
-      gasCylinder: { startDate: null } };
+      gasCylinder: { startDate: null },
+      specialDays: [],       // [{id, date, title, type, meals:{breakfast,lunch,dinner}, recurring:bool}]
+      vegRestrictions: { days: [], months: [] }, // days: [5] for Fridays; months: ["2026-04"]
+    };
     this.save();
   },
   migrate() {
@@ -43,6 +47,8 @@ const Store = {
     this.state.tracker.milk ||= {};
     this.state.tracker.newspaper ||= {};
     this.state.gasCylinder ||= { startDate: null };
+    this.state.specialDays ||= [];
+    this.state.vegRestrictions ||= { days: [], months: [] };
     // Ensure new grocery items exist
     const existing = new Set(this.state.items.map(i => i.name));
     GROCERY_SEED.forEach(g => {
@@ -63,6 +69,29 @@ function getRegion() { return Store.state.settings.region || "Kerala"; }
 function getCurries() { return REGION_CURRIES[getRegion()] || KERALA_CURRIES; }
 function getMealRules() { return REGION_MEAL_RULES[getRegion()] || MEAL_RULES_KERALA; }
 
+// ===== VEG RESTRICTION CHECK =====
+function isVegOnly(dateStr) {
+  const vr = Store.state.vegRestrictions;
+  if (!vr) return false;
+  const d = new Date(dateStr);
+  const dow = d.getDay(); // 0=Sun
+  if (vr.days && vr.days.includes(dow)) return true;
+  if (vr.months && vr.months.includes(dateStr.slice(0,7))) return true;
+  return false;
+}
+
+// ===== SPECIAL DAYS =====
+function getSpecialDay(dateStr) {
+  const sds = Store.state.specialDays || [];
+  // Direct date match
+  let found = sds.find(s => s.date === dateStr);
+  if (found) return found;
+  // Check recurring (same month-day every year)
+  const mmdd = dateStr.slice(5); // "MM-DD"
+  found = sds.find(s => s.recurring && s.date.slice(5) === mmdd);
+  return found || null;
+}
+
 // ===== FESTIVAL SERVICE =====
 const FestivalService = {
   getActive(region) {
@@ -78,22 +107,17 @@ const FestivalService = {
       .sort((a,b) => a.start.localeCompare(b.start))[0] || null;
   },
   getDayIndex(festival) {
-    const start = new Date(festival.start);
-    const today = new Date(todayKey());
-    return Math.floor((today - start) / 86400000);
+    return Math.floor((new Date(todayKey()) - new Date(festival.start)) / 86400000);
   },
   getDuration(festival) {
-    const start = new Date(festival.start);
-    const end = new Date(festival.end);
-    return Math.floor((end - start) / 86400000) + 1;
+    return Math.floor((new Date(festival.end) - new Date(festival.start)) / 86400000) + 1;
   },
   getTodaysMeals(festival) {
-    const mp = festival.mealPlan;
-    const dayIdx = this.getDayIndex(festival);
+    const mp = festival.mealPlan, dayIdx = this.getDayIndex(festival);
     if (mp.type === "festival") return mp.meals;
     if (mp.type === "progressive") {
-      const dayEntry = (mp.days || []).find(d => d.dayOffset === dayIdx);
-      return dayEntry ? dayEntry.meals : null;
+      const de = (mp.days || []).find(d => d.dayOffset === dayIdx);
+      return de ? de.meals : null;
     }
     if (mp.type === "pattern") {
       const key = (mp.pattern || [])[dayIdx];
@@ -124,21 +148,26 @@ document.querySelectorAll(".tab").forEach(t => {
   };
 });
 
-// ===== FESTIVAL BANNER (above Today) =====
+// ===== FESTIVAL BANNER =====
 function renderFestivalBanner() {
   const el = document.getElementById("festival-banner");
   if (!el) return;
   const region = getRegion();
   const active = FestivalService.getActive(region);
   const next = !active ? FestivalService.getNext(region) : null;
+  const specialDay = getSpecialDay(todayKey());
 
-  if (active) {
+  if (specialDay && !active) {
+    el.className = "festival-banner active special-day-banner";
+    el.innerHTML = `<div class="fest-greeting">🎂 ${specialDay.title}</div>
+      ${specialDay.meals ? `<div class="fest-meals">${Object.entries(specialDay.meals).map(([s,m])=>
+        `<div class="fest-dish"><span>${s}</span>${m}</div>`).join("")}</div>` : ""}`;
+  } else if (active) {
     const dayIdx = FestivalService.getDayIndex(active);
     const duration = FestivalService.getDuration(active);
     const pct = Math.round(((dayIdx + 1) / duration) * 100);
     const isPeak = FestivalService.isPeakDay(active);
     const meals = FestivalService.getTodaysMeals(active);
-
     let html = `<div class="fest-greeting">${isPeak ? "🎉 " : "🎊 "}${active.greeting}</div>`;
     html += `<div class="fest-progress"><span>${active.name} — Day ${dayIdx+1} of ${duration}</span>
       <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div></div>`;
@@ -172,7 +201,18 @@ function renderToday() {
   document.getElementById("today-date").textContent =
     today.toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
 
-  // Gas cylinder info
+  // Veg-only indicator
+  const vegBadge = document.getElementById("today-veg-badge");
+  if (vegBadge) vegBadge.style.display = isVegOnly(key) ? "inline-block" : "none";
+
+  // Special day indicator
+  const specialDay = getSpecialDay(key);
+  const specialBadge = document.getElementById("today-special-badge");
+  if (specialBadge) {
+    if (specialDay) { specialBadge.textContent = `🎂 ${specialDay.title}`; specialBadge.style.display = "inline-block"; }
+    else specialBadge.style.display = "none";
+  }
+
   renderGasCylinderWidget();
 
   const saved = Store.state.plans[key];
@@ -183,35 +223,47 @@ function renderToday() {
     { id:"dinner",    icon:"🌙", label:"Dinner" },
   ];
 
-  // Check active festival
   const region = getRegion();
   const activeFest = FestivalService.getActive(region);
   const festMeals = activeFest ? FestivalService.getTodaysMeals(activeFest) : null;
   const festMode = Store.state.settings.festivalMode;
 
-  slots.forEach(({ id, icon, label }) => {
+  slots.forEach(({ id }) => {
     const card = document.getElementById(`today-${id}`);
     if (!card) return;
     const saved_meal = saved && saved[id];
-    const options = allCookable(id, p, bev);
+    const vegOnly = isVegOnly(key);
+    const options = allCookable(id, p, bev, key);
     const current = saved_meal ? saved_meal.name : null;
 
-    // Festival override indicator
+    // Festival override
     const festOverride = festMeals && festMeals[id] && festMode === "override";
     const festLabel = card.querySelector(".fest-override-label");
     if (festLabel) {
       if (festOverride) {
         festLabel.textContent = `🎊 ${activeFest.name}: ${Array.isArray(festMeals[id]) ? festMeals[id].join(", ") : festMeals[id]}`;
         festLabel.style.display = "block";
-      } else {
-        festLabel.style.display = "none";
-      }
+      } else festLabel.style.display = "none";
+    }
+
+    // Special day meal override
+    const specialMealLabel = card.querySelector(".special-day-label");
+    if (specialMealLabel) {
+      if (specialDay && specialDay.meals && specialDay.meals[id] && !festOverride) {
+        specialMealLabel.textContent = `🎂 ${specialDay.title}: ${specialDay.meals[id]}`;
+        specialMealLabel.style.display = "block";
+      } else specialMealLabel.style.display = "none";
     }
 
     const sel = card.querySelector("select");
     sel.innerHTML = options.map(o =>
       `<option value="${o.name}" ${o.name===current?"selected":""}>${o.display}${o.fullyCookable?"":" ⚠"}</option>`
-    ).join("") || `<option>— nothing available —</option>`;
+    ).join("");
+    // If no fully cookable options, show buy suggestions
+    if (!options.some(o => o.fullyCookable) && options.length) {
+      sel.innerHTML += `<option disabled>── buy ingredients for ──</option>`;
+    }
+    if (!options.length) sel.innerHTML = `<option>— nothing available —</option>`;
 
     const disp = card.querySelector(".today-meal-display");
     if (festOverride) {
@@ -220,19 +272,29 @@ function renderToday() {
     } else if (saved_meal && saved_meal.display) {
       disp.textContent = saved_meal.display;
       disp.className = "today-meal-display set";
-    } else if (options.length) {
-      disp.textContent = options[0].display + (options[0].fullyCookable ? "" : " ⚠");
+    } else if (options.length && options[0].fullyCookable) {
+      disp.textContent = options[0].display;
       disp.className = "today-meal-display suggestion";
+    } else if (options.length) {
+      // Best partial match — show with buy prompt
+      disp.textContent = options[0].display + " ⚠";
+      disp.className = "today-meal-display suggestion partial";
     } else {
       disp.textContent = "No suggestion — stock basics";
       disp.className = "today-meal-display empty";
     }
 
-    const miss = card.querySelector(".today-missing");
-    if (saved_meal && saved_meal.missing && saved_meal.missing.length) {
-      miss.textContent = "needs: " + saved_meal.missing.join(", ");
-      miss.style.display = "inline-block";
-    } else miss.style.display = "none";
+    // Missing ingredient buy-button for today's suggestion
+    const missEl = card.querySelector(".today-missing");
+    const bestMissing = (!saved_meal && options.length && options[0].missing.length) ? options[0].missing : (saved_meal && saved_meal.missing) || [];
+    if (bestMissing.length) {
+      missEl.innerHTML = `needs: ${bestMissing.join(", ")} <button class="btn xs buy-missing-btn">+ Buy</button>`;
+      missEl.style.display = "inline-block";
+      missEl.querySelector(".buy-missing-btn").onclick = () => {
+        addMissingToGrocery(bestMissing);
+        missEl.style.display = "none";
+      };
+    } else missEl.style.display = "none";
 
     sel.onchange = () => {
       const rule = getMealRules()[id].find(r => r.name === sel.value);
@@ -244,6 +306,19 @@ function renderToday() {
       renderToday();
     };
   });
+}
+
+// ===== ADD MISSING INGREDIENTS TO GROCERY =====
+function addMissingToGrocery(missingList) {
+  let added = 0;
+  missingList.forEach(name => {
+    const tok = name.toLowerCase().trim();
+    if (tok.includes(" ") && tok.includes("more item")) return; // skip "2 more item(s)" etc
+    if (tok === "curry ingredients") return;
+    const item = Store.state.items.find(i => i.name.toLowerCase() === tok);
+    if (item && !item.needsBuy && item.qty === 0) { item.needsBuy = true; added++; }
+  });
+  if (added) { Store.save(); renderToday(); }
 }
 
 // ===== GAS CYLINDER WIDGET =====
@@ -277,10 +352,10 @@ document.getElementById("btn-today-from-template").onclick = () => {
   const tpl = Store.state.template;
   const p = pantry(), bev = Store.state.settings.beverage;
   const rules = getMealRules();
-  if (!tpl) { alert("No weekly template saved yet. Go to Meal Plan tab, generate and save a template first."); return; }
+  if (!tpl) { alert("No weekly template saved yet."); return; }
   const dow = new Date().getDay();
   const dayPlan = tpl[dow];
-  if (!dayPlan) { alert("No template entry for today. Try generating a new plan."); return; }
+  if (!dayPlan) { alert("No template entry for today."); return; }
   Store.state.plans[key] = {};
   for (const slot of ["breakfast","lunch","tea","dinner"]) {
     const want = dayPlan[slot]; if (!want) continue;
@@ -288,7 +363,7 @@ document.getElementById("btn-today-from-template").onclick = () => {
     const cooked = rule ? tryCook(rule, p, true) : null;
     if (cooked) Store.state.plans[key][slot] = { name: cooked.name, display: cooked.display, missing: [] };
     else {
-      const opts = allCookable(slot, p, bev).filter(c => c.fullyCookable);
+      const opts = allCookable(slot, p, bev, key).filter(c => c.fullyCookable);
       const sub = opts[0];
       Store.state.plans[key][slot] = sub
         ? { name: sub.name, display: sub.display + " ↺", missing: [] }
@@ -304,11 +379,19 @@ document.getElementById("btn-today-suggest").onclick = () => {
   const recent = { breakfast:[], lunch:[], tea:[], dinner:[] };
   const meals = {};
   for (const slot of ["breakfast","lunch","tea","dinner"]) {
-    const pick = pickMeal(slot, p, recent[slot], bev);
-    meals[slot] = pick
-      ? { name: pick.name, display: pick.display, missing: pick.missing }
-      : { name: null, display: "No suggestion — stock basics", missing: [] };
-    if (pick) recent[slot].push(pick.name);
+    const pick = pickMeal(slot, p, recent[slot], bev, key);
+    if (pick) {
+      meals[slot] = { name: pick.name, display: pick.display, missing: pick.missing };
+      recent[slot].push(pick.name);
+    } else {
+      // Even when nothing is fully cookable, find best partial match and suggest buying
+      const partials = allCookable(slot, p, bev, key);
+      if (partials.length) {
+        meals[slot] = { name: partials[0].name, display: partials[0].display + " ⚠", missing: partials[0].missing };
+      } else {
+        meals[slot] = { name: null, display: "No suggestion — stock basics", missing: [] };
+      }
+    }
   }
   Store.state.plans[key] = meals;
   Store.save(); renderToday();
@@ -358,7 +441,7 @@ document.getElementById("btn-reset-month").onclick = () => {
 function renderGrocery() {
   const root = document.getElementById("grocery-list"); root.innerHTML = "";
   const toBuy = Store.state.items.filter(i => i.needsBuy);
-  if (!toBuy.length) { root.innerHTML = `<p class="hint">Nothing to buy.</p>`; return; }
+  if (!toBuy.length) { root.innerHTML = `<p class="hint">Nothing to buy. Your kitchen is well-stocked!</p>`; return; }
   const groups = {}; toBuy.forEach(it => { (groups[it.category] ||= []).push(it); });
   Object.entries(groups).forEach(([cat, items]) => {
     const div = document.createElement("div"); div.className = "category";
@@ -379,18 +462,15 @@ function renderGrocery() {
 
 // ===== PANTRY MATCHING =====
 function pantry() { return new Set(Store.state.items.filter(i => i.qty > 0).map(i => i.name.toLowerCase())); }
-function has(token, p) {
-  // Exact match only — no substring matching to avoid
-  // "rice" matching "rice bran oil" or "chilli" matching "chilli powder"
-  return p.has(token.toLowerCase());
-}
+function has(token, p) { return p.has(token.toLowerCase()); }
 function pickAll(list, p)   { return list.filter(x => has(x, p)); }
 function pickFirst(list, p) { return list.find(x => has(x, p)); }
 
-// ===== MEAL ENGINE (region-aware) =====
-function resolveCurry(p) {
+// ===== MEAL ENGINE =====
+function resolveCurry(p, vegOnly) {
   const curries = getCurries();
-  for (const cu of curries) {
+  const filtered = vegOnly ? curries.filter(c => !c.nonVeg) : curries;
+  for (const cu of filtered) {
     if (!cu.needs.every(n => has(n, p))) continue;
     if (cu.minFrom) { const m = pickAll(cu.minFrom, p);
       if (m.length < cu.minCount) continue;
@@ -404,13 +484,17 @@ function resolvePoriyal(p) {
   const v = pickFirst(PORIYAL_VEG, p);
   return v ? `${cap(v)} Poriyal` : null;
 }
-
 function resolveVepudu(p) {
   const v = pickFirst(VEPUDU_VEG, p);
   return v ? `${cap(v)} Vepudu` : null;
 }
+function resolvePalya(p) {
+  const v = pickFirst(PALYA_VEG, p);
+  return v ? `${cap(v)} Palya` : null;
+}
 
-function tryCook(meal, p, strict = true) {
+function tryCook(meal, p, strict = true, vegOnly = false) {
+  if (vegOnly && meal.nonVeg) return null;
   const missing = meal.base.filter(b => !has(b, p));
   if (strict && missing.length) return null;
   const ctx = { matched: [], missing: [...missing] };
@@ -424,24 +508,31 @@ function tryCook(meal, p, strict = true) {
   if (meal.withThoran) { const v = pickFirst(THORAN_VEG, p); ctx.thoran = v ? `${cap(v)} Thoran` : null; }
   if (meal.withPoriyal) { ctx.poriyal = resolvePoriyal(p); }
   if (meal.withVepudu)  { ctx.vepudu  = resolveVepudu(p); }
-  if (meal.withCurry) { const c = resolveCurry(p); if (!c) { if (strict) return null; ctx.missing.push("curry ingredients"); } ctx.curry = c || "Curry"; }
+  if (meal.withPalya)   { ctx.palya   = resolvePalya(p); }
+  if (meal.withCurry) {
+    const c = resolveCurry(p, vegOnly);
+    if (!c) { if (strict) return null; ctx.missing.push("curry ingredients"); }
+    ctx.curry = c || "Curry";
+  }
   const display = meal.render ? meal.render(ctx) : meal.name;
-  return { name: meal.name, type: meal.type, display, simple: meal.simple, special: meal.special, missing: ctx.missing };
+  return { name: meal.name, type: meal.type, display, simple: meal.simple, special: meal.special, missing: ctx.missing, nonVeg: meal.nonVeg };
 }
 
-function pickMeal(slot, p, recent, bev) {
+function pickMeal(slot, p, recent, bev, dateStr) {
   const rules = getMealRules();
   let pool = rules[slot];
   if (!pool) return null;
+  const vegOnly = dateStr ? isVegOnly(dateStr) : false;
   if (slot === "tea") {
     pool = pool.filter(m => !m.beverage || m.beverage === "either" || bev === "either" || m.beverage === bev);
     pool = pool.filter(m => !m.blackFallback || !has("milk", p));
   }
-  let cookable = pool.map(m => tryCook(m, p, true)).filter(Boolean).filter(c => !recent.includes(c.name));
-  if (!cookable.length) cookable = pool.map(m => tryCook(m, p, true)).filter(Boolean);
+  let cookable = pool.map(m => tryCook(m, p, true, vegOnly)).filter(Boolean).filter(c => !recent.includes(c.name));
+  if (!cookable.length) cookable = pool.map(m => tryCook(m, p, true, vegOnly)).filter(Boolean);
   if (!cookable.length) {
+    // Relax strict matching — include partial matches
     cookable = pool.map(m => {
-      const c = tryCook(m, p, false); if (!c) return null;
+      const c = tryCook(m, p, false, vegOnly); if (!c) return null;
       const total = m.base.length || 1;
       const have = total - m.base.filter(b => !has(b, p)).length;
       return (have / total) >= 0.5 ? c : null;
@@ -459,12 +550,13 @@ function pickMeal(slot, p, recent, bev) {
   return pool2[Math.floor(Math.random()*pool2.length)];
 }
 
-function allCookable(slot, p, bev) {
+function allCookable(slot, p, bev, dateStr) {
   const rules = getMealRules();
   let pool = rules[slot];
   if (!pool) return [];
+  const vegOnly = dateStr ? isVegOnly(dateStr) : false;
   if (slot === "tea") pool = pool.filter(m => !m.beverage || m.beverage === "either" || bev === "either" || m.beverage === bev);
-  return pool.map(m => tryCook(m, p, false)).filter(Boolean).map(c => ({
+  return pool.map(m => tryCook(m, p, false, vegOnly)).filter(Boolean).map(c => ({
     ...c, fullyCookable: c.missing.length === 0
   })).sort((a,b) => a.missing.length - b.missing.length);
 }
@@ -472,14 +564,26 @@ function allCookable(slot, p, bev) {
 function generatePlan(startDate, days = 7) {
   const p = pantry(), bev = Store.state.settings.beverage, plan = [];
   const recent = { breakfast:[], lunch:[], tea:[], dinner:[] };
+  const allMissing = new Set();
   for (let i = 0; i < days; i++) {
     const d = new Date(startDate); d.setDate(d.getDate()+i);
     const key = d.toISOString().slice(0,10); const meals = {};
     for (const slot of ["breakfast","lunch","tea","dinner"]) {
-      const pick = pickMeal(slot, p, recent[slot].slice(-2), bev);
-      meals[slot] = pick ? { name: pick.name, display: pick.display, missing: pick.missing }
-                         : { name: null, display: "No suggestion — stock basics", missing: ["any ingredients"] };
-      if (pick) recent[slot].push(pick.name);
+      const pick = pickMeal(slot, p, recent[slot].slice(-2), bev, key);
+      if (pick) {
+        meals[slot] = { name: pick.name, display: pick.display, missing: pick.missing };
+        if (pick) recent[slot].push(pick.name);
+        pick.missing.forEach(m => allMissing.add(m));
+      } else {
+        // Show best partial match instead of empty
+        const partials = allCookable(slot, p, bev, key);
+        if (partials.length) {
+          meals[slot] = { name: partials[0].name, display: partials[0].display + " ⚠", missing: partials[0].missing };
+          partials[0].missing.forEach(m => allMissing.add(m));
+        } else {
+          meals[slot] = { name: null, display: "No suggestion — stock basics", missing: [] };
+        }
+      }
     }
     Store.state.plans[key] = meals; plan.push({ date: key, meals });
   }
@@ -518,8 +622,7 @@ document.getElementById("btn-save-template").onclick = () => {
   const tpl = {};
   for (let i = 0; i < 7; i++) {
     const d = new Date(start); d.setDate(d.getDate()+i);
-    const key = d.toISOString().slice(0,10);
-    const dow = d.getDay();
+    const key = d.toISOString().slice(0,10), dow = d.getDay();
     if (Store.state.plans[key]) tpl[dow] = Store.state.plans[key];
   }
   Store.state.template = tpl; Store.save();
@@ -542,7 +645,7 @@ document.getElementById("btn-apply-template").onclick = () => {
       const cooked = rule ? tryCook(rule, p, true) : null;
       if (cooked) meals[slot] = { name: cooked.name, display: cooked.display, missing: [] };
       else {
-        const options = allCookable(slot, p, bev).filter(c => c.fullyCookable);
+        const options = allCookable(slot, p, bev, key).filter(c => c.fullyCookable);
         const sameType = options.find(o => rule && o.type === rule.type);
         const sub = sameType || options[0];
         if (sub) { meals[slot] = { name: sub.name, display: sub.display + " ↺", missing: [] };
@@ -579,14 +682,18 @@ function renderPlan(plan) {
   const region = getRegion();
   const missingSet = new Set();
   plan.forEach(d => {
-    // Check if this day falls in a festival
     const dayDate = d.date;
     const activeFest = FESTIVAL_DATA.find(f => f.states.includes(region) && f.start <= dayDate && f.end >= dayDate);
+    const specialDay = getSpecialDay(dayDate);
+    const vegOnly = isVegOnly(dayDate);
 
     const card = document.createElement("div");
-    card.className = "day-card" + (activeFest ? " festival-day" : "");
+    card.className = "day-card" + (activeFest ? " festival-day" : "") + (specialDay ? " special-day" : "") + (vegOnly ? " veg-day" : "");
     const label = new Date(d.date).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
-    let html = activeFest ? `<div class="fest-badge">${activeFest.name}</div>` : "";
+    let html = "";
+    if (activeFest) html += `<div class="fest-badge">${activeFest.name}</div>`;
+    if (specialDay) html += `<div class="special-badge">🎂 ${specialDay.title}</div>`;
+    if (vegOnly) html += `<div class="veg-badge-small">🌿 Veg</div>`;
     html += `<h4>${label}</h4>`;
     for (const [slot, icon] of [["breakfast","🌅"],["lunch","🍛"],["tea","☕"],["dinner","🌙"]]) {
       const m = d.meals[slot] || {};
@@ -597,7 +704,7 @@ function renderPlan(plan) {
         if (item && !item.needsBuy && item.qty === 0) missingSet.add(item.id);
       });
       if (editMode) {
-        const opts = allCookable(slot, p, bev);
+        const opts = allCookable(slot, p, bev, dayDate);
         const sel = opts.map(o => `<option value="${o.name}" ${m.name===o.name?"selected":""}>${o.display}${o.fullyCookable?"":" ⚠"}</option>`).join("");
         html += `<div class="meal-row"><b>${icon} ${slot}</b>
           <select data-date="${d.date}" data-slot="${slot}">${sel || `<option>—</option>`}</select></div>`;
@@ -642,34 +749,140 @@ document.getElementById("btn-approve-all").onclick = () => {
 
 document.getElementById("plan-start").value = new Date().toISOString().slice(0,10);
 
-// ===== FESTIVALS PANEL =====
+// ===== FESTIVALS & SPECIAL DAYS PANEL =====
 function renderFestivalsPanel() {
   const region = getRegion();
   const list = document.getElementById("festival-list");
   if (!list) return;
   list.innerHTML = "";
   const today = todayKey();
-  const festivals = FestivalService.getAllForRegion(region);
 
-  if (!festivals.length) {
-    list.innerHTML = `<p class="hint">No festivals configured for ${region}.</p>`;
-    return;
+  // Festivals
+  const festivals = FestivalService.getAllForRegion(region);
+  if (festivals.length) {
+    const h = document.createElement("h3"); h.textContent = "Festivals"; list.appendChild(h);
+    festivals.forEach(f => {
+      const isActive = f.start <= today && f.end >= today;
+      const isPast = f.end < today;
+      const card = document.createElement("div");
+      card.className = "fest-card" + (isActive ? " active" : "") + (isPast ? " past" : "");
+      const badge = isActive ? `<span class="badge live">Live</span>` :
+                    isPast ? `<span class="badge past">Past</span>` :
+                    `<span class="badge soon">Upcoming</span>`;
+      card.innerHTML = `
+        <div class="fest-card-head"><h4>${f.name}</h4>${badge}</div>
+        <div class="fest-card-meta">${fmtDate(f.start)}${f.start !== f.end ? " — " + fmtDate(f.end) : ""}</div>
+        ${isActive ? `<div class="fest-card-greeting">${f.greeting}</div>` : ""}`;
+      list.appendChild(card);
+    });
   }
 
-  festivals.forEach(f => {
-    const isActive = f.start <= today && f.end >= today;
-    const isPast = f.end < today;
-    const card = document.createElement("div");
-    card.className = "fest-card" + (isActive ? " active" : "") + (isPast ? " past" : "");
-    const badge = isActive ? `<span class="badge live">Live</span>` :
-                  isPast ? `<span class="badge past">Past</span>` :
-                  `<span class="badge soon">Upcoming</span>`;
-    card.innerHTML = `
-      <div class="fest-card-head"><h4>${f.name}</h4>${badge}</div>
-      <div class="fest-card-meta">${fmtDate(f.start)}${f.start !== f.end ? " — " + fmtDate(f.end) : ""}</div>
-      <div class="fest-card-states">${f.states.join(", ")}</div>
-      ${isActive ? `<div class="fest-card-greeting">${f.greeting}</div>` : ""}`;
-    list.appendChild(card);
+  // Special Days
+  const sds = Store.state.specialDays || [];
+  const sdHeader = document.createElement("div");
+  sdHeader.className = "sd-header";
+  sdHeader.innerHTML = `<h3>Special Days</h3><button class="btn xs primary" id="btn-add-special-day">+ Add</button>`;
+  list.appendChild(sdHeader);
+
+  if (sds.length) {
+    sds.sort((a,b) => a.date.localeCompare(b.date)).forEach(sd => {
+      const isPast = sd.date < today && !sd.recurring;
+      const card = document.createElement("div");
+      card.className = "fest-card special" + (isPast ? " past" : "");
+      card.innerHTML = `
+        <div class="fest-card-head">
+          <h4>🎂 ${sd.title}</h4>
+          ${sd.recurring ? `<span class="badge recur">Every year</span>` : `<span class="badge soon">${fmtDate(sd.date)}</span>`}
+        </div>
+        <div class="fest-card-meta">${sd.type || "Custom"}${sd.meals ? " · Custom meals set" : ""}</div>
+        <button class="btn xs sd-del" data-id="${sd.id}" style="margin-top:6px;color:var(--red)">Delete</button>`;
+      card.querySelector(".sd-del").onclick = () => {
+        Store.state.specialDays = Store.state.specialDays.filter(x => x.id !== sd.id);
+        Store.save(); renderFestivalsPanel();
+      };
+      list.appendChild(card);
+    });
+  } else {
+    list.appendChild(Object.assign(document.createElement("p"), { className:"hint", textContent:"No special days added yet." }));
+  }
+
+  document.getElementById("btn-add-special-day").onclick = showAddSpecialDayDialog;
+
+  // Veg Restrictions
+  renderVegRestrictions(list);
+}
+
+function showAddSpecialDayDialog() {
+  const overlay = document.createElement("div"); overlay.className = "dialog-overlay";
+  overlay.innerHTML = `<div class="dialog">
+    <h3>Add Special Day</h3>
+    <label>Title <input id="sd-title" placeholder="e.g. Mom's Birthday" /></label>
+    <label>Date <input id="sd-date" type="date" /></label>
+    <label>Type <select id="sd-type">
+      <option value="Birthday">Birthday</option><option value="Anniversary">Anniversary</option>
+      <option value="Custom">Custom</option></select></label>
+    <label class="switch"><input type="checkbox" id="sd-recurring" checked /> Repeats every year</label>
+    <label>Special meal (optional) <input id="sd-meal" placeholder="e.g. Biriyani, Payasam" /></label>
+    <div class="dialog-actions">
+      <button class="btn" id="sd-cancel">Cancel</button>
+      <button class="btn primary" id="sd-save">Save</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById("sd-cancel").onclick = () => overlay.remove();
+  document.getElementById("sd-save").onclick = () => {
+    const title = document.getElementById("sd-title").value.trim();
+    const date = document.getElementById("sd-date").value;
+    if (!title || !date) { alert("Title and date are required."); return; }
+    const type = document.getElementById("sd-type").value;
+    const recurring = document.getElementById("sd-recurring").checked;
+    const mealStr = document.getElementById("sd-meal").value.trim();
+    const meals = mealStr ? { lunch: mealStr } : null;
+    Store.state.specialDays.push({ id: uid(), date, title, type, recurring, meals });
+    Store.save(); overlay.remove(); renderFestivalsPanel();
+  };
+}
+
+function renderVegRestrictions(container) {
+  const vr = Store.state.vegRestrictions;
+  const section = document.createElement("div"); section.className = "veg-restrictions-section";
+  const dayNames = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  section.innerHTML = `<h3>Veg-Only Rules</h3>
+    <p class="hint">Non-veg meals are excluded on veg-only days or months.</p>
+    <div class="veg-days">
+      <label>Veg days of the week:</label>
+      <div class="veg-day-chips">${dayNames.map((d,i) =>
+        `<button class="chip-btn${vr.days.includes(i)?" active":""}" data-day="${i}">${d}</button>`
+      ).join("")}</div>
+    </div>
+    <div class="veg-month-row">
+      <label>Veg-only month: <input type="month" id="veg-month-input" /></label>
+      <button class="btn xs primary" id="btn-add-veg-month">Add</button>
+    </div>
+    ${vr.months.length ? `<div class="veg-months-list">${vr.months.map(m =>
+      `<span class="chip">${m} <button class="vm-del" data-month="${m}">✗</button></span>`
+    ).join("")}</div>` : ""}`;
+
+  container.appendChild(section);
+
+  section.querySelectorAll(".chip-btn").forEach(btn => {
+    btn.onclick = () => {
+      const day = parseInt(btn.dataset.day);
+      const idx = vr.days.indexOf(day);
+      if (idx === -1) vr.days.push(day); else vr.days.splice(idx, 1);
+      Store.save(); renderFestivalsPanel();
+    };
+  });
+  const addMonthBtn = section.querySelector("#btn-add-veg-month");
+  if (addMonthBtn) addMonthBtn.onclick = () => {
+    const val = document.getElementById("veg-month-input").value;
+    if (val && !vr.months.includes(val)) { vr.months.push(val); Store.save(); renderFestivalsPanel(); }
+  };
+  section.querySelectorAll(".vm-del").forEach(btn => {
+    btn.onclick = () => {
+      vr.months = vr.months.filter(m => m !== btn.dataset.month);
+      Store.save(); renderFestivalsPanel();
+    };
   });
 }
 
@@ -697,7 +910,7 @@ document.getElementById("btn-add-rem").onclick = () => {
 document.getElementById("btn-enable-notif").onclick = async () => {
   if (!("Notification" in window)) return alert("Not supported.");
   const res = await Notification.requestPermission();
-  alert(res === "granted" ? "Enabled ✅" : "Permission: " + res);
+  alert(res === "granted" ? "Enabled" : "Permission: " + res);
 };
 
 // ===== REMINDER SUB-TABS =====
@@ -710,12 +923,10 @@ document.querySelectorAll(".rem-tab").forEach(t => {
   };
 });
 
-// ===== TRACKER (Maid + Milk + Newspaper) =====
+// ===== TRACKER =====
 let trackerMonth = monthKey();
 
-function renderTracker() {
-  renderTrackerMonth();
-}
+function renderTracker() { renderTrackerMonth(); }
 
 function renderTrackerMonth() {
   const [yr, mo] = trackerMonth.split("-").map(Number);
@@ -805,14 +1016,12 @@ function renderTrackerMonth() {
 
 document.getElementById("tracker-prev").onclick = () => {
   const [yr, mo] = trackerMonth.split("-").map(Number);
-  const d = new Date(yr, mo-2, 1);
-  trackerMonth = d.toISOString().slice(0,7);
+  trackerMonth = new Date(yr, mo-2, 1).toISOString().slice(0,7);
   renderTrackerMonth();
 };
 document.getElementById("tracker-next").onclick = () => {
   const [yr, mo] = trackerMonth.split("-").map(Number);
-  const d = new Date(yr, mo, 1);
-  trackerMonth = d.toISOString().slice(0,7);
+  trackerMonth = new Date(yr, mo, 1).toISOString().slice(0,7);
   renderTrackerMonth();
 };
 
@@ -824,7 +1033,6 @@ function initRegionSelector() {
   sel.onchange = () => {
     Store.state.settings.region = sel.value;
     Store.save();
-    // Update title
     if (document.getElementById("meal-plan-title"))
       document.getElementById("meal-plan-title").textContent = `${sel.value} Meal Plan`;
     renderToday();

@@ -201,4 +201,52 @@ input,select { padding:9px 12px; border:1.5px solid var(--border); border-radius
 .fest-card-states { font-size:11px; color:var(--blue); font-weight:500; }
 .fest-card-greeting { font-size:13px; color:var(--orange); font-weight:600; margin-top:6px; }
 
+/* ===== DIALOG OVERLAY ===== */
+.dialog-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:100; display:flex; align-items:center; justify-content:center; padding:16px; }
+.dialog { background:#fff; border-radius:16px; padding:24px; max-width:420px; width:100%; box-shadow:0 8px 32px rgba(0,0,0,0.2); display:flex; flex-direction:column; gap:12px; }
+.dialog h3 { margin:0 0 4px; font-size:16px; color:var(--orange); }
+.dialog label { display:flex; flex-direction:column; gap:4px; font-size:13px; font-weight:600; color:var(--muted); }
+.dialog label input, .dialog label select { margin-top:2px; }
+.dialog-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
+
+/* ===== VEG & SPECIAL BADGES ===== */
+.veg-badge-small { display:inline-block; background:#e8f7ec; color:var(--green); font-size:11px; font-weight:700; padding:3px 10px; border-radius:12px; }
+.special-badge { display:inline-block; background:#fff3e0; color:var(--orange); font-size:11px; font-weight:700; padding:3px 10px; border-radius:12px; }
+.special-day-label { font-size:12px; color:var(--purple); font-weight:600; background:#f3e8fd; padding:4px 8px; border-radius:6px; }
+.special-day-banner { background:linear-gradient(135deg,#f3e8fd 0%,#ede0fd 100%) !important; border-bottom-color:var(--purple) !important; }
+
+/* ===== CHIP BUTTONS (Veg day toggles) ===== */
+.chip-btn { background:#faf9f2; border:1.5px solid var(--border); border-radius:20px; padding:6px 14px; font-size:13px; font-weight:600; cursor:pointer; color:var(--muted); transition:all 0.15s; }
+.chip-btn:hover { border-color:var(--green); }
+.chip-btn.active { background:var(--green); color:#fff; border-color:var(--green); }
+
+/* ===== VEG RESTRICTIONS SECTION ===== */
+.veg-restrictions-section { margin-top:20px; padding-top:16px; border-top:1px solid var(--border); }
+.veg-restrictions-section h3 { margin-bottom:8px; }
+.veg-days { margin-bottom:12px; }
+.veg-days label { font-size:13px; font-weight:600; color:var(--muted); display:block; margin-bottom:6px; }
+.veg-day-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.veg-month-row { display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:8px; }
+.veg-month-row label { font-size:13px; font-weight:600; color:var(--muted); }
+.veg-months-list { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+
+/* ===== SPECIAL DAYS HEADER ===== */
+.sd-header { display:flex; justify-content:space-between; align-items:center; margin-top:20px; padding-top:16px; border-top:1px solid var(--border); margin-bottom:8px; }
+.sd-header h3 { margin:0; }
+
+/* ===== BUY MISSING BUTTON ===== */
+.buy-missing-btn { background:var(--green); color:#fff; border:none; border-radius:4px; padding:2px 8px; font-size:10px; font-weight:700; cursor:pointer; margin-left:4px; vertical-align:middle; }
+.buy-missing-btn:hover { background:#178a3a; }
+
+/* ===== PARTIAL MATCH HIGHLIGHT ===== */
+.today-meal-display.partial { color:var(--orange); }
+.meal-row.partial { background:#fff8e8; border-radius:6px; padding:8px; }
+
+/* ===== RECURRING BADGE ===== */
+.badge.recur { background:#e8f7ec; color:var(--green); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; padding:2px 8px; border-radius:4px; }
+
+/* ===== SPECIAL FEST CARD ===== */
+.fest-card.special { border-left-color:var(--purple); }
+.fest-card.special.past { opacity:0.5; }
+
 footer { text-align:center; padding:24px; color:var(--muted); font-size:12px; }
