@@ -1,0 +1,117 @@
+name: Build Android AAB (Play Store)
+
+# Builds a signed Android App Bundle (.aab) from the PWA using Bubblewrap (TWA).
+# No Android Studio required — runs entirely on GitHub Actions.
+#
+# Prerequisites (one-time setup):
+#   1. Deploy this PWA to an HTTPS domain (e.g. GitHub Pages, Netlify, Vercel).
+#   2. Update `host`, `iconUrl`, `webManifestUrl`, `fullScopeUrl` in twa-manifest.json.
+#   3. Generate an upload keystore ONCE locally:
+#        keytool -genkeypair -v -keystore android.keystore -alias android \
+#          -keyalg RSA -keysize 2048 -validity 10000
+#   4. Add these GitHub repo secrets:
+#        ANDROID_KEYSTORE_BASE64  — `base64 android.keystore`
+#        KEYSTORE_PASSWORD        — keystore password
+#        KEY_ALIAS                — key alias (default: android)
+#        KEY_PASSWORD             — key password
+#   5. After first successful build, upload the AAB to Play Console, then
+#      download the SHA-256 fingerprint of the app-signing key from Play Console
+#      → Setup → App integrity, and publish it at:
+#        https://<your-host>/.well-known/assetlinks.json
+#      (Bubblewrap prints the assetlinks.json during build — use that template.)
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: "Android versionCode (integer)"
+        required: false
+        default: ""
+      version_name:
+        description: "Android versionName (e.g. 1.0.1)"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Bubblewrap CLI
+        run: npm install -g @bubblewrap/cli@latest
+
+      - name: Decode signing keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android.keystore
+          test -s android.keystore
+
+      - name: Bump version (optional)
+        if: ${{ github.event.inputs.version_code != '' || github.event.inputs.version_name != '' }}
+        run: |
+          node -e "
+            const fs=require('fs'),p='twa-manifest.json',m=JSON.parse(fs.readFileSync(p));
+            const vc='${{ github.event.inputs.version_code }}';
+            const vn='${{ github.event.inputs.version_name }}';
+            if(vc) m.appVersionCode=parseInt(vc,10);
+            if(vn) m.appVersionName=vn;
+            fs.writeFileSync(p, JSON.stringify(m,null,2));
+          "
+
+      - name: Bubblewrap init (refresh project)
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME }}
+        run: |
+          # Accept Android SDK licenses non-interactively; bubblewrap will install what it needs.
+          mkdir -p $HOME/.bubblewrap
+          cat > $HOME/.bubblewrap/config.json <<EOF
+          { "jdkPath": "$JAVA_HOME", "androidSdkPath": "$HOME/android-sdk" }
+          EOF
+          yes | bubblewrap doctor || true
+          # Use update to regenerate gradle project from our manifest
+          bubblewrap update --skipVersionUpgrade || bubblewrap init --manifest=./twa-manifest.json --directory=.
+
+      - name: Build signed AAB
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          bubblewrap build \
+            --skipPwaValidation \
+            --signingKeyPath=./android.keystore \
+            --signingKeyAlias="${KEY_ALIAS:-android}"
+        # Bubblewrap prompts for passwords via env vars BUBBLEWRAP_KEYSTORE_PASSWORD / BUBBLEWRAP_KEY_PASSWORD
+        # on recent versions; fall back to expect-style feed if needed.
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pachaka-lokam-android
+          path: |
+            app-release-bundle.aab
+            app-release-signed.apk
+            assetlinks.json
+          if-no-files-found: warn
+
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            app-release-bundle.aab
+            app-release-signed.apk
