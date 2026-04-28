@@ -21,6 +21,7 @@ const GROCERY_SEED = [
     ["Brinjal",U("kg",0.5,0.25)],["Ridge gourd",U("kg",0.5,0.25)],
     ["Bottle gourd",U("kg",0.5,0.25)],["Bitter gourd",U("kg",0.25,0.25)],
     ["Capsicum",U("nos",2,1)],["Ivy gourd",U("kg",0.25,0.25)],
+    ["Green peas",U("g",250,50)],
   ]},
   { category: "Staples & Pulses", items: [
     ["Rice",U("kg",5,1)],["Toor dal",U("kg",1,0.25)],["Moong dal",U("kg",0.5,0.25)],
@@ -179,47 +180,69 @@ const SHARED_TEA_RULES = [
     render:c=>`Fresh ${c.matched[0]} Juice` },
 ];
 
+// AP / Telangana additional tea-time favourites
+const EXTRA_TEA_AP_TG = [
+  { name:"Tea + Punugulu", type:"tea-snack", beverage:"tea", base:["tea powder","milk","sugar","urad dal","rice"], simple:false, priority:1 },
+  { name:"Tea + Button Idli", type:"tea-snack", beverage:"tea", base:["tea powder","milk","sugar","rice","urad dal"], simple:false, priority:2 },
+  { name:"Tea + Samosa", type:"tea-snack", beverage:"tea", base:["tea powder","milk","sugar","aata","potato"], simple:false, priority:2 },
+  { name:"Tea + Mirchi Bajji", type:"tea-snack", beverage:"tea", base:["tea powder","milk","sugar","chilli","aata"], simple:false, priority:3 },
+  { name:"Coffee + Punugulu", type:"tea-snack", beverage:"coffee", base:["coffee powder","milk","sugar","urad dal","rice"], simple:false, priority:1 },
+  { name:"Coffee + Samosa", type:"tea-snack", beverage:"coffee", base:["coffee powder","milk","sugar","aata","potato"], simple:false, priority:2 },
+];
+
 // ---------- KERALA ----------
+// Priority: lower number = preferred. Picker biases toward priority 1 within same dish family.
 const MEAL_RULES_KERALA = {
   breakfast: [
-    { name:"Idli + Sambar", type:"steamed", base:["rice","urad dal","toor dal"], simple:true },
-    { name:"Idli + Coconut Chutney", type:"steamed", base:["rice","urad dal","coconut"], simple:true },
-    { name:"Dosa + Coconut Chutney", type:"dosa", base:["rice","urad dal","coconut"], simple:true },
-    { name:"Dosa + Sambar", type:"dosa", base:["rice","urad dal","toor dal"], simple:true },
-    { name:"Masala Dosa + Chutney", type:"dosa", base:["rice","urad dal","potato","onion"], simple:true },
-    { name:"Puttu + Kadala Curry", type:"puttu", base:["rice","chana","coconut"], simple:true },
-    { name:"Puttu + Banana", type:"puttu", base:["rice","banana"], simple:true },
-    { name:"Appam + Veg Stew", type:"appam", base:["rice","potato","coconut milk"], simple:true },
-    { name:"Appam + Egg Curry", type:"appam", base:["rice","egg","onion"], simple:true, nonVeg:true },
-    { name:"Idiyappam + Egg Curry", type:"idiyappam", base:["rice","egg","onion"], simple:true, nonVeg:true },
-    { name:"Idiyappam + Veg Stew", type:"idiyappam", base:["rice","potato","coconut milk"], simple:true },
-    { name:"Idiyappam + Coconut Milk", type:"idiyappam", base:["rice","coconut milk"], simple:true },
+    // Idli — coconut chutney first, sambar second
+    { name:"Idli + Coconut Chutney", type:"steamed", base:["rice","urad dal","coconut"], simple:true, priority:1 },
+    { name:"Idli + Sambar", type:"steamed", base:["rice","urad dal","toor dal"], simple:true, priority:2 },
+    // Dosa — coconut chutney first, sambar second
+    { name:"Dosa + Coconut Chutney", type:"dosa", base:["rice","urad dal","coconut"], simple:true, priority:1 },
+    { name:"Dosa + Sambar", type:"dosa", base:["rice","urad dal","toor dal"], simple:true, priority:2 },
+    { name:"Masala Dosa + Chutney", type:"dosa", base:["rice","urad dal","potato","onion","coconut"], simple:true, priority:3 },
+    // Puttu — banana first, kadala curry second
+    { name:"Puttu + Banana", type:"puttu", base:["rice","banana"], simple:true, priority:1 },
+    { name:"Puttu + Kadala Curry", type:"puttu", base:["rice","chana","coconut"], simple:true, priority:2 },
+    // Appam — stew, green peas, chicken
+    { name:"Appam + Veg Stew", type:"appam", base:["rice","potato","coconut milk"], simple:true, priority:1 },
+    { name:"Appam + Green Peas Curry", type:"appam", base:["rice","green peas","coconut milk","onion"], simple:true, priority:2 },
+    { name:"Appam + Chicken Curry", type:"appam", base:["rice","chicken","onion","coconut milk"], simple:false, nonVeg:true, priority:3 },
+    { name:"Appam + Egg Curry", type:"appam", base:["rice","egg","onion"], simple:true, nonVeg:true, priority:4 },
+    // Idiyappam
+    { name:"Idiyappam + Veg Stew", type:"idiyappam", base:["rice","potato","coconut milk"], simple:true, priority:1 },
+    { name:"Idiyappam + Egg Curry", type:"idiyappam", base:["rice","egg","onion"], simple:true, nonVeg:true, priority:2 },
+    { name:"Idiyappam + Coconut Milk", type:"idiyappam", base:["rice","coconut milk"], simple:true, priority:3 },
     { name:"Upma", type:"rawa", base:["rawa","onion"], simple:true },
-    { name:"Poori + Potato Masala", type:"poori", base:["aata","potato","onion"], simple:false },
+    // Poori — must be paired with potato curry
+    { name:"Poori + Potato Curry", type:"poori", base:["aata","potato","onion"], simple:false, priority:1 },
     { name:"Bread + Egg Omelette", type:"bread", base:["bread","egg"], simple:true, nonVeg:true },
   ],
   lunch: [
-    { name:"Rice + Sambar + Thoran", type:"rice-curry", base:["rice"], withCurry:true, withThoran:true, simple:true,
+    { name:"Rice + Sambar + Thoran", type:"rice-curry", base:["rice"], withCurry:true, withThoran:true, simple:true, priority:1,
       render:c=>`Rice + ${c.curry} + ${c.thoran||"Pickle"}` },
-    { name:"Rice + Fish Curry", type:"rice-nonveg", base:["rice","fish","coconut"], withThoran:true, simple:false, nonVeg:true,
+    { name:"Rice + Fish Curry", type:"rice-nonveg", base:["rice","fish","coconut"], withThoran:true, simple:false, nonVeg:true, priority:2,
       render:c=>`Rice + Fish Curry + ${c.thoran||"Pickle"}` },
-    { name:"Rice + Chicken Curry", type:"rice-nonveg", base:["rice","chicken","onion"], simple:false, nonVeg:true },
-    { name:"Rice + Egg Curry + Thoran", type:"rice-curry", base:["rice","egg","onion"], withThoran:true, simple:true, nonVeg:true,
+    { name:"Rice + Chicken Curry", type:"rice-nonveg", base:["rice","chicken","onion"], simple:false, nonVeg:true, priority:3 },
+    { name:"Rice + Egg Curry + Thoran", type:"rice-curry", base:["rice","egg","onion"], withThoran:true, simple:true, nonVeg:true, priority:2,
       render:c=>`Rice + Egg Curry + ${c.thoran||"Pickle"}` },
     { name:"Chicken Biriyani", type:"biriyani", base:["rice","chicken","onion","curd"], simple:false, special:true, nonVeg:true },
-    { name:"Chapati + Curry", type:"chapati", base:["aata"], withCurry:true, simple:false, special:true,
-      render:c=>`Chapati + ${c.curry}` },
+    // Chapati for lunch — only with chicken or potato curry (defining ingredient required)
+    { name:"Chapati + Chicken Curry", type:"chapati", base:["aata","chicken","onion"], simple:false, special:true, nonVeg:true, priority:1 },
+    { name:"Chapati + Potato Curry", type:"chapati", base:["aata","potato","onion"], simple:false, special:true, priority:2 },
   ],
   tea: SHARED_TEA_RULES,
   dinner: [
-    { name:"Rice + Sambar", type:"rice-light", base:["rice","toor dal"], minFrom:SAMBAR_VEG, minCount:1, simple:true,
+    { name:"Rice + Sambar", type:"rice-light", base:["rice","toor dal"], minFrom:SAMBAR_VEG, minCount:1, simple:true, priority:1,
       render:c=>`Rice + Sambar (${c.matched.join(", ")})` },
-    { name:"Curd Rice", type:"rice-light", base:["rice","curd"], simple:true },
-    { name:"Sambar Rice", type:"rice-light", base:["rice","toor dal"], simple:true },
-    { name:"Dal Khichdi", type:"rice-light", base:["rice","moong dal"], simple:true },
-    { name:"Kanji + Payar", type:"rice-light", base:["rice","cowpeas"], simple:true },
-    { name:"Dosa + Coconut Chutney", type:"dosa", base:["rice","urad dal","coconut"], simple:true },
-    { name:"Chapati + Curry", type:"chapati", base:["aata"], withCurry:true, simple:false, render:c=>`Chapati + ${c.curry}` },
+    { name:"Curd Rice", type:"rice-light", base:["rice","curd"], simple:true, priority:2 },
+    { name:"Sambar Rice", type:"rice-light", base:["rice","toor dal"], simple:true, priority:3 },
+    { name:"Dal Khichdi", type:"rice-light", base:["rice","moong dal"], simple:true, priority:3 },
+    { name:"Kanji + Payar", type:"rice-light", base:["rice","cowpeas"], simple:true, priority:3 },
+    { name:"Dosa + Coconut Chutney", type:"dosa", base:["rice","urad dal","coconut"], simple:true, priority:2 },
+    // Chapati for dinner — strictly only with chicken or potato curry
+    { name:"Chapati + Chicken Curry", type:"chapati", base:["aata","chicken","onion"], simple:false, nonVeg:true, priority:1 },
+    { name:"Chapati + Potato Curry", type:"chapati", base:["aata","potato","onion"], simple:false, priority:2 },
   ],
 };
 
@@ -265,14 +288,22 @@ const MEAL_RULES_TN = {
 
 const MEAL_RULES_AP = {
   breakfast: [
-    { name:"Pesarattu + Ginger Chutney", type:"pesarattu", base:["moong dal"], simple:true },
-    { name:"Idli + Sambar", type:"steamed", base:["rice","urad dal","toor dal"], simple:true },
-    { name:"Idli + Coconut Chutney", type:"steamed", base:["rice","urad dal","coconut"], simple:true },
-    { name:"Idli + Peanut Chutney", type:"steamed", base:["rice","urad dal","peanuts"], simple:true },
-    { name:"Dosa + Coconut Chutney", type:"dosa", base:["rice","urad dal","coconut"], simple:true },
-    { name:"Dosa + Sambar", type:"dosa", base:["rice","urad dal","toor dal"], simple:true },
+    // Idli — groundnut chutney 1st, karam podi+ghee 2nd, sambar 3rd
+    { name:"Idli + Groundnut Chutney", type:"steamed", base:["rice","urad dal","peanuts"], simple:true, priority:1 },
+    { name:"Idli + Karam Podi + Ghee", type:"steamed", base:["rice","urad dal","ghee","chilli powder"], simple:true, priority:2 },
+    { name:"Idli + Sambar", type:"steamed", base:["rice","urad dal","toor dal"], simple:true, priority:3 },
+    { name:"Idli + Coconut Chutney", type:"steamed", base:["rice","urad dal","coconut"], simple:true, priority:4 },
+    // Dosa — groundnut chutney 1st, onion+ghee+karam 2nd, potato curry 3rd
+    { name:"Dosa + Groundnut Chutney", type:"dosa", base:["rice","urad dal","peanuts"], simple:true, priority:1 },
+    { name:"Dosa + Onion Karam Podi (Ghee)", type:"dosa", base:["rice","urad dal","onion","ghee","chilli powder"], simple:true, priority:2 },
+    { name:"Dosa + Potato Curry", type:"dosa", base:["rice","urad dal","potato","onion"], simple:true, priority:3 },
+    { name:"Dosa + Coconut Chutney", type:"dosa", base:["rice","urad dal","coconut"], simple:true, priority:4 },
+    { name:"Dosa + Sambar", type:"dosa", base:["rice","urad dal","toor dal"], simple:true, priority:5 },
+    // Pesarattu (signature AP)
+    { name:"Pesarattu + Ginger Chutney", type:"pesarattu", base:["moong dal","ginger"], simple:true, priority:1 },
+    { name:"Pesarattu + Upma (MLA Pesarattu)", type:"pesarattu", base:["moong dal","rawa","onion"], simple:true, priority:2 },
     { name:"Upma", type:"rawa", base:["rawa","onion"], simple:true },
-    { name:"Poori + Potato Curry", type:"poori", base:["aata","potato","onion"], simple:false },
+    { name:"Poori + Potato Curry", type:"poori", base:["aata","potato","onion"], simple:false, priority:1 },
     { name:"Bread + Egg Omelette", type:"bread", base:["bread","egg"], simple:true, nonVeg:true },
   ],
   lunch: [
@@ -285,28 +316,43 @@ const MEAL_RULES_AP = {
     { name:"Rice + Gutti Vankaya", type:"rice-veg", base:["rice","brinjal","onion","coconut"], simple:false },
     { name:"Rice + Chicken Curry", type:"rice-nonveg", base:["rice","chicken","onion"], simple:false, nonVeg:true },
     { name:"Chicken Biriyani", type:"biriyani", base:["rice","chicken","onion","curd"], simple:false, special:true, nonVeg:true },
-    { name:"Chapati + Dal Fry", type:"chapati", base:["aata","toor dal","onion"], simple:false, special:true },
+    // Chapati for AP/TG lunch — chicken or potato required
+    { name:"Chapati + Chicken Curry", type:"chapati", base:["aata","chicken","onion"], simple:false, special:true, nonVeg:true, priority:1 },
+    { name:"Chapati + Potato Curry", type:"chapati", base:["aata","potato","onion"], simple:false, special:true, priority:2 },
   ],
-  tea: SHARED_TEA_RULES,
+  tea: SHARED_TEA_RULES.concat(EXTRA_TEA_AP_TG),
   dinner: [
-    { name:"Rice + Pappu", type:"rice-light", base:["rice","toor dal"], minFrom:PAPPU_VEG, minCount:1, simple:true,
+    { name:"Rice + Pappu", type:"rice-light", base:["rice","toor dal"], minFrom:PAPPU_VEG, minCount:1, simple:true, priority:1,
       render:c=>`Rice + Pappu (${c.matched.join(", ")})` },
-    { name:"Rice + Rasam", type:"rice-light", base:["rice","tomato","tamarind"], simple:true },
-    { name:"Curd Rice", type:"rice-light", base:["rice","curd"], simple:true },
-    { name:"Pesarattu", type:"pesarattu", base:["moong dal","rice"], simple:true },
-    { name:"Dosa + Coconut Chutney", type:"dosa", base:["rice","urad dal","coconut"], simple:true },
-    { name:"Chapati + Dal Fry", type:"chapati", base:["aata","toor dal","onion"], simple:false },
+    { name:"Rice + Rasam", type:"rice-light", base:["rice","tomato","tamarind"], simple:true, priority:2 },
+    { name:"Curd Rice", type:"rice-light", base:["rice","curd"], simple:true, priority:2 },
+    { name:"Pesarattu", type:"pesarattu", base:["moong dal","rice"], simple:true, priority:2 },
+    { name:"Dosa + Groundnut Chutney", type:"dosa", base:["rice","urad dal","peanuts"], simple:true, priority:2 },
+    { name:"Dosa + Coconut Chutney", type:"dosa", base:["rice","urad dal","coconut"], simple:true, priority:3 },
+    // Chapati only with chicken or potato
+    { name:"Chapati + Chicken Curry", type:"chapati", base:["aata","chicken","onion"], simple:false, nonVeg:true, priority:1 },
+    { name:"Chapati + Potato Curry", type:"chapati", base:["aata","potato","onion"], simple:false, priority:2 },
   ],
 };
 
 const MEAL_RULES_TG = {
   breakfast: [
-    { name:"Pesarattu + Upma", type:"pesarattu", base:["moong dal","rawa","onion"], simple:true },
-    { name:"Idli + Coconut Chutney", type:"steamed", base:["rice","urad dal","coconut"], simple:true },
-    { name:"Idli + Peanut Chutney", type:"steamed", base:["rice","urad dal","peanuts"], simple:true },
-    { name:"Dosa + Coconut Chutney", type:"dosa", base:["rice","urad dal","coconut"], simple:true },
-    { name:"Dosa + Sambar", type:"dosa", base:["rice","urad dal","toor dal"], simple:true },
-    { name:"Poori + Aloo Curry", type:"poori", base:["aata","potato","onion"], simple:false },
+    // Idli — groundnut chutney 1st, karam podi+ghee 2nd, sambar 3rd
+    { name:"Idli + Groundnut Chutney", type:"steamed", base:["rice","urad dal","peanuts"], simple:true, priority:1 },
+    { name:"Idli + Karam Podi + Ghee", type:"steamed", base:["rice","urad dal","ghee","chilli powder"], simple:true, priority:2 },
+    { name:"Idli + Sambar", type:"steamed", base:["rice","urad dal","toor dal"], simple:true, priority:3 },
+    { name:"Idli + Coconut Chutney", type:"steamed", base:["rice","urad dal","coconut"], simple:true, priority:4 },
+    // Dosa — groundnut chutney 1st, onion+ghee+karam 2nd, potato 3rd
+    { name:"Dosa + Groundnut Chutney", type:"dosa", base:["rice","urad dal","peanuts"], simple:true, priority:1 },
+    { name:"Dosa + Onion Karam Podi (Ghee)", type:"dosa", base:["rice","urad dal","onion","ghee","chilli powder"], simple:true, priority:2 },
+    { name:"Dosa + Potato Curry", type:"dosa", base:["rice","urad dal","potato","onion"], simple:true, priority:3 },
+    { name:"Dosa + Coconut Chutney", type:"dosa", base:["rice","urad dal","coconut"], simple:true, priority:4 },
+    { name:"Dosa + Sambar", type:"dosa", base:["rice","urad dal","toor dal"], simple:true, priority:5 },
+    // Pesarettu — signature TG breakfast as well
+    { name:"Pesarattu + Ginger Chutney", type:"pesarattu", base:["moong dal","ginger"], simple:true, priority:1 },
+    { name:"Pesarattu + Upma (MLA)", type:"pesarattu", base:["moong dal","rawa","onion"], simple:true, priority:2 },
+    { name:"Upma", type:"rawa", base:["rawa","onion"], simple:true },
+    { name:"Poori + Aloo Curry", type:"poori", base:["aata","potato","onion"], simple:false, priority:1 },
     { name:"Bread + Egg Omelette", type:"bread", base:["bread","egg"], simple:true, nonVeg:true },
   ],
   lunch: [
@@ -318,16 +364,21 @@ const MEAL_RULES_TG = {
     { name:"Curd Rice + Pickle", type:"rice-light", base:["rice","curd"], simple:true },
     { name:"Rice + Natu Kodi Pulusu", type:"rice-nonveg", base:["rice","chicken","onion"], simple:false, nonVeg:true },
     { name:"Chicken Biriyani", type:"biriyani", base:["rice","chicken","onion","curd"], simple:false, special:true, nonVeg:true },
-    { name:"Chapati + Dal", type:"chapati", base:["aata","toor dal","onion"], simple:false, special:true },
+    // Chapati for TG lunch — chicken or potato required
+    { name:"Chapati + Chicken Curry", type:"chapati", base:["aata","chicken","onion"], simple:false, special:true, nonVeg:true, priority:1 },
+    { name:"Chapati + Potato Curry", type:"chapati", base:["aata","potato","onion"], simple:false, special:true, priority:2 },
   ],
-  tea: SHARED_TEA_RULES,
+  tea: SHARED_TEA_RULES.concat(EXTRA_TEA_AP_TG),
   dinner: [
-    { name:"Rice + Pappu", type:"rice-light", base:["rice","toor dal"], minFrom:PAPPU_VEG, minCount:1, simple:true,
+    { name:"Rice + Pappu", type:"rice-light", base:["rice","toor dal"], minFrom:PAPPU_VEG, minCount:1, simple:true, priority:1,
       render:c=>`Rice + Pappu (${c.matched.join(", ")})` },
-    { name:"Rice + Rasam + Pickle", type:"rice-light", base:["rice","tomato","tamarind"], simple:true },
-    { name:"Curd Rice", type:"rice-light", base:["rice","curd"], simple:true },
-    { name:"Dosa + Coconut Chutney", type:"dosa", base:["rice","urad dal","coconut"], simple:true },
-    { name:"Chapati + Dal", type:"chapati", base:["aata","toor dal","onion"], simple:false },
+    { name:"Rice + Rasam + Pickle", type:"rice-light", base:["rice","tomato","tamarind"], simple:true, priority:2 },
+    { name:"Curd Rice", type:"rice-light", base:["rice","curd"], simple:true, priority:2 },
+    { name:"Dosa + Groundnut Chutney", type:"dosa", base:["rice","urad dal","peanuts"], simple:true, priority:2 },
+    { name:"Dosa + Coconut Chutney", type:"dosa", base:["rice","urad dal","coconut"], simple:true, priority:3 },
+    // Chapati only with chicken or potato
+    { name:"Chapati + Chicken Curry", type:"chapati", base:["aata","chicken","onion"], simple:false, nonVeg:true, priority:1 },
+    { name:"Chapati + Potato Curry", type:"chapati", base:["aata","potato","onion"], simple:false, priority:2 },
   ],
 };
 
@@ -499,9 +550,163 @@ const FESTIVAL_DATA = [
   { id:"vishu-2028", name:"Vishu", states:["Kerala"],
     start:"2028-04-14", end:"2028-04-15", peak:"2028-04-14", greeting:"Vishu Ashamsakal!",
     mealPlan:{type:"festival",meals:{breakfast:["Vishu Kanji","Thattil Koottu"],lunch:["Sadya","Vishu Katta","Veppampoorasam","Payasam"],dinner:["Rice","Sambar","Thoran","Papadam"]}}},
+
+  // ===== ADDITIONAL REGIONAL FESTIVALS =====
+  // ---- Kerala extras ----
+  { id:"thrissur-pooram-2026", name:"Thrissur Pooram", states:["Kerala"],
+    start:"2026-04-26", end:"2026-04-26", peak:"2026-04-26", greeting:"Pooram Aashamsakal!",
+    mealPlan:{type:"festival",meals:{breakfast:["Puttu","Kadala Curry"],lunch:["Sadya","Avial","Olan","Thoran","Payasam"],dinner:["Rice","Sambar","Pickle"]}}},
+  { id:"easter-2026", name:"Easter", states:["Kerala","Tamil Nadu"],
+    start:"2026-04-05", end:"2026-04-05", peak:"2026-04-05", greeting:"Happy Easter!",
+    mealPlan:{type:"festival",meals:{breakfast:["Appam","Egg Curry"],lunch:["Rice","Chicken Curry","Salad","Pal Payasam"],dinner:["Rice","Fish Curry"]}}},
+  { id:"karthika-vilakku-2026", name:"Karthika Vilakku", states:["Kerala"],
+    start:"2026-12-04", end:"2026-12-04", peak:"2026-12-04", greeting:"Karthika Vilakku Aashamsakal!",
+    mealPlan:{type:"festival",meals:{breakfast:["Idli","Sambar"],lunch:["Rice","Sambar","Avial","Payasam"],dinner:["Appam","Stew"]}}},
+  { id:"christmas-2026", name:"Christmas", states:["Kerala","Tamil Nadu","Andhra Pradesh","Telangana","Karnataka"],
+    start:"2026-12-25", end:"2026-12-25", peak:"2026-12-25", greeting:"Merry Christmas!",
+    mealPlan:{type:"festival",meals:{breakfast:["Appam","Stew"],lunch:["Chicken Biriyani","Salad","Plum Cake"],dinner:["Rice","Sambar","Pickle"]}}},
+  // ---- Tamil Nadu extras ----
+  { id:"karthigai-deepam-2026", name:"Karthigai Deepam", states:["Tamil Nadu"],
+    start:"2026-12-04", end:"2026-12-04", peak:"2026-12-04", greeting:"Karthigai Deepam Nalvazhthukkal!",
+    mealPlan:{type:"festival",meals:{breakfast:["Pori","Aval"],lunch:["Rice","Sambar","Poriyal","Pori Urundai","Appam"],dinner:["Rice","Rasam","Pickle"]}}},
+  { id:"shivaratri-2026", name:"Maha Shivaratri", states:["Tamil Nadu","Andhra Pradesh","Telangana","Karnataka","Kerala"],
+    start:"2026-02-15", end:"2026-02-15", peak:"2026-02-15", greeting:"Om Namah Shivaya!",
+    mealPlan:{type:"festival",meals:{breakfast:["Sabudana Khichdi","Fruits"],lunch:["Rice","Curd Rice","Pickle"],dinner:["Rice","Sambar"]}}},
+  { id:"varalakshmi-2026", name:"Varalakshmi Vratham", states:["Tamil Nadu","Andhra Pradesh","Telangana","Karnataka"],
+    start:"2026-08-07", end:"2026-08-07", peak:"2026-08-07", greeting:"Varalakshmi Vratham Subhakankshalu!",
+    mealPlan:{type:"festival",meals:{breakfast:["Kesari","Pongal"],lunch:["Rice","Sambar","Vada","Payasam","Sundal"],dinner:["Rice","Rasam","Pickle"]}}},
+  // ---- AP extras ----
+  { id:"sri-rama-navami-2026", name:"Sri Rama Navami", states:["Andhra Pradesh","Telangana","Tamil Nadu","Karnataka"],
+    start:"2026-03-27", end:"2026-03-27", peak:"2026-03-27", greeting:"Sri Rama Navami Subhakankshalu!",
+    mealPlan:{type:"festival",meals:{breakfast:["Vada","Pulihora"],lunch:["Rice","Sambar","Pulihora","Panakam","Vadapappu"],dinner:["Rice","Rasam"]}}},
+  { id:"atla-tadde-2026", name:"Atla Tadde", states:["Andhra Pradesh","Telangana"],
+    start:"2026-10-08", end:"2026-10-08", peak:"2026-10-08", greeting:"Atla Tadde Subhakankshalu!",
+    mealPlan:{type:"festival",meals:{breakfast:["Atlu (Dosa)","Chutney"],lunch:["Rice","Pappu","Vepudu"],dinner:["Atlu","Pickle"]}}},
+  // ---- Telangana extras ----
+  { id:"bonalu-2026", name:"Bonalu", states:["Telangana"],
+    start:"2026-07-19", end:"2026-08-09", peak:"2026-08-02", greeting:"Bonalu Subhakankshalu!",
+    mealPlan:{type:"pattern",pattern:["simple","simple","medium","medium","medium","medium","medium","heavy","heavy","heavy","heavy","heavy","heavy","heavy","grand","grand","grand","grand","grand","grand","grand","grand"],
+      templates:{simple:{lunch:["Rice","Pappu","Vepudu","Perugu"]},medium:{lunch:["Rice","Pappu","Vepudu","Pulihora","Perugu"]},heavy:{lunch:["Rice","Pappu","Pulihora","Bonam","Vepudu","Perugu"]},grand:{lunch:["Bonam","Rice","Pappu","Pulihora","Garelu","Payasam","Bobbatlu"]}}}},
+  { id:"sammakka-2026", name:"Sammakka Saralamma Jatara", states:["Telangana"],
+    start:"2026-02-04", end:"2026-02-07", peak:"2026-02-05", greeting:"Sammakka Saralamma Jatara Subhakankshalu!",
+    mealPlan:{type:"festival",meals:{breakfast:["Pesarattu","Chutney"],lunch:["Rice","Pappu","Vepudu","Pulihora"],dinner:["Rice","Rasam","Pickle"]}}},
+
+  // ===== Same recurring set for 2027 =====
+  { id:"thrissur-pooram-2027", name:"Thrissur Pooram", states:["Kerala"],
+    start:"2027-05-15", end:"2027-05-15", peak:"2027-05-15", greeting:"Pooram Aashamsakal!",
+    mealPlan:{type:"festival",meals:{breakfast:["Puttu","Kadala Curry"],lunch:["Sadya","Avial","Olan","Thoran","Payasam"],dinner:["Rice","Sambar","Pickle"]}}},
+  { id:"easter-2027", name:"Easter", states:["Kerala","Tamil Nadu"],
+    start:"2027-03-28", end:"2027-03-28", peak:"2027-03-28", greeting:"Happy Easter!",
+    mealPlan:{type:"festival",meals:{breakfast:["Appam","Egg Curry"],lunch:["Rice","Chicken Curry","Salad","Pal Payasam"],dinner:["Rice","Fish Curry"]}}},
+  { id:"karthika-vilakku-2027", name:"Karthika Vilakku", states:["Kerala"],
+    start:"2027-11-23", end:"2027-11-23", peak:"2027-11-23", greeting:"Karthika Vilakku Aashamsakal!",
+    mealPlan:{type:"festival",meals:{breakfast:["Idli","Sambar"],lunch:["Rice","Sambar","Avial","Payasam"],dinner:["Appam","Stew"]}}},
+  { id:"christmas-2027", name:"Christmas", states:["Kerala","Tamil Nadu","Andhra Pradesh","Telangana","Karnataka"],
+    start:"2027-12-25", end:"2027-12-25", peak:"2027-12-25", greeting:"Merry Christmas!",
+    mealPlan:{type:"festival",meals:{breakfast:["Appam","Stew"],lunch:["Chicken Biriyani","Salad","Plum Cake"],dinner:["Rice","Sambar","Pickle"]}}},
+  { id:"karthigai-deepam-2027", name:"Karthigai Deepam", states:["Tamil Nadu"],
+    start:"2027-11-23", end:"2027-11-23", peak:"2027-11-23", greeting:"Karthigai Deepam Nalvazhthukkal!",
+    mealPlan:{type:"festival",meals:{breakfast:["Pori","Aval"],lunch:["Rice","Sambar","Poriyal","Pori Urundai","Appam"],dinner:["Rice","Rasam","Pickle"]}}},
+  { id:"shivaratri-2027", name:"Maha Shivaratri", states:["Tamil Nadu","Andhra Pradesh","Telangana","Karnataka","Kerala"],
+    start:"2027-03-06", end:"2027-03-06", peak:"2027-03-06", greeting:"Om Namah Shivaya!",
+    mealPlan:{type:"festival",meals:{breakfast:["Sabudana Khichdi","Fruits"],lunch:["Rice","Curd Rice","Pickle"],dinner:["Rice","Sambar"]}}},
+  { id:"sri-rama-navami-2027", name:"Sri Rama Navami", states:["Andhra Pradesh","Telangana","Tamil Nadu","Karnataka"],
+    start:"2027-04-15", end:"2027-04-15", peak:"2027-04-15", greeting:"Sri Rama Navami Subhakankshalu!",
+    mealPlan:{type:"festival",meals:{breakfast:["Vada","Pulihora"],lunch:["Rice","Sambar","Pulihora","Panakam","Vadapappu"],dinner:["Rice","Rasam"]}}},
+  { id:"bonalu-2027", name:"Bonalu", states:["Telangana"],
+    start:"2027-07-08", end:"2027-07-29", peak:"2027-07-22", greeting:"Bonalu Subhakankshalu!",
+    mealPlan:{type:"pattern",pattern:["simple","simple","medium","medium","medium","medium","medium","heavy","heavy","heavy","heavy","heavy","heavy","heavy","grand","grand","grand","grand","grand","grand","grand","grand"],
+      templates:{simple:{lunch:["Rice","Pappu","Vepudu","Perugu"]},medium:{lunch:["Rice","Pappu","Vepudu","Pulihora","Perugu"]},heavy:{lunch:["Rice","Pappu","Pulihora","Bonam","Vepudu","Perugu"]},grand:{lunch:["Bonam","Rice","Pappu","Pulihora","Garelu","Payasam","Bobbatlu"]}}}},
 ];
 
 const REMINDER_SEED = [
   { title:"Buy Milk", frequency:"daily", time:"07:00", active:true },
   { title:"Vegetable shopping", frequency:"weekly", time:"09:00", active:true },
 ];
+
+// Default water reminder configuration — disabled until user opts in.
+const WATER_REMINDER_DEFAULT = {
+  enabled: false,
+  intervalMinutes: 60,    // every hour
+  startTime: "08:00",
+  endTime: "22:00",
+  glassesGoal: 8,
+};
+
+// =====================================================================
+//  ICON LIBRARY — keep this file as the single source of truth so the
+//  same emoji shows up in Kitchen, Grocery, Meal Plan and Today views.
+// =====================================================================
+const ITEM_ICON = {
+  // Vegetables
+  "Carrot":"🥕","Potato":"🥔","Tomato":"🍅","Onion":"🧅","Shallots":"🧅",
+  "Ladiesfinger":"🌿","Drumstick":"🌿","Chilli":"🌶️","Capsicum":"🫑",
+  "Cauliflower":"🥦","Cabbage":"🥬","Snake gourd":"🥒","Ash gourd":"🥒",
+  "Pumpkin":"🎃","Yam":"🍠","Raw banana":"🍌","Raw mango":"🥭",
+  "Beans":"🫛","Beetroot":"🟣","Cucumber":"🥒","Brinjal":"🍆",
+  "Ridge gourd":"🥒","Bottle gourd":"🥒","Bitter gourd":"🥒","Ivy gourd":"🥒",
+  "Green peas":"🟢",
+  // Staples & Pulses
+  "Rice":"🍚","Toor dal":"🟡","Moong dal":"🟢","Urad dal":"⚪",
+  "Chana":"🟠","Cowpeas":"🟤","Peanuts":"🥜","Rawa":"🌾","Aata":"🌾",
+  "Sugar":"🍬","Salt":"🧂","Tea powder":"🍵","Coffee powder":"☕",
+  "Jaggery":"🍯","Tamarind":"🟫","Vermicelli":"🍝","Ragi flour":"🌾","Jowar flour":"🌾",
+  // Non-Veg
+  "Chicken":"🍗","Fish":"🐟","Egg":"🥚","Prawns":"🦐","Mutton":"🥩",
+  // Dairy & Bakery
+  "Bread":"🍞","Curd":"🥛","Milk":"🥛","Coconut milk":"🥥",
+  "Butter":"🧈","Ghee":"🧈",
+  // Oils
+  "Coconut oil":"🫗","Rice bran oil":"🫗","Sesame oil":"🫗",
+  // Spices
+  "Coconut":"🥥","Chilli powder":"🌶️","Masala powder":"🍂","General spices":"🌿",
+  // Snacks
+  "Biscuit":"🍪","Rusk":"🥖","Cookies":"🍪","Mixture":"🥨","Banana chips":"🍌",
+  // Fruits
+  "Banana":"🍌","Apple":"🍎","Mango":"🥭","Grapes":"🍇",
+  "Pomegranate":"🍎","Watermelon":"🍉","Kiwi":"🥝","Strawberry":"🍓",
+};
+
+const CATEGORY_ICON = {
+  "Vegetables":"🥬",
+  "Staples & Pulses":"🌾",
+  "Non-Veg":"🍗",
+  "Dairy & Bakery":"🥛",
+  "Oils":"🫗",
+  "Spices":"🌶️",
+  "Snacks":"🍪",
+  "Fruits (Seasonal)":"🍎",
+};
+
+function getItemIcon(name) {
+  return ITEM_ICON[name] || "🥗";
+}
+function getCategoryIcon(cat) {
+  return CATEGORY_ICON[cat] || "🍽️";
+}
+
+// Keyword-based icon for meals — survives slight name variations.
+function getMealIcon(name) {
+  if (!name) return "🍽️";
+  const n = name.toLowerCase();
+  if (n.includes("biriyani") || n.includes("biryani")) return "🍛";
+  if (n.includes("idli"))                              return "🥟";
+  if (n.includes("dosa") || n.includes("pesarattu") || n.includes("appam") || n.includes("atlu")) return "🥞";
+  if (n.includes("puttu"))                             return "🌾";
+  if (n.includes("idiyappam"))                         return "🍜";
+  if (n.includes("upma") || n.includes("pongal") || n.includes("khichdi") || n.includes("kanji")) return "🥣";
+  if (n.includes("poori") || n.includes("puri") || n.includes("chapati") || n.includes("akki roti") || n.includes("ragi mudde") || n.includes("roti")) return "🫓";
+  if (n.includes("bread"))                             return "🍞";
+  if (n.includes("chicken"))                           return "🍗";
+  if (n.includes("fish") || n.includes("prawn"))       return "🐟";
+  if (n.includes("egg"))                               return "🥚";
+  if (n.includes("rice") || n.includes("pulihora") || n.includes("puliyodarai") || n.includes("puliyogare") || n.includes("vangi bath") || n.includes("bisi bele") || n.includes("lemon rice")) return "🍚";
+  if (n.includes("juice"))                             return "🥤";
+  if (n.includes("coffee"))                            return "☕";
+  if (n.startsWith("tea") || n.includes("black tea"))  return "🍵";
+  if (n.includes("milk"))                              return "🥛";
+  if (n.includes("samosa"))                            return "🥟";
+  if (n.includes("punugulu") || n.includes("bajji") || n.includes("button idli") || n.includes("mixture") || n.includes("vada") || n.includes("garelu")) return "🥨";
+  if (n.includes("payasam"))                           return "🍮";
+  return "🍽️";
+}

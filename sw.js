@@ -1,6 +1,6 @@
 // Pachaka Lokam — offline cache.
 // Bump CACHE version whenever shell files change to force refresh.
-const CACHE = "pl-v3";
+const CACHE = "pl-v6";
 const SHELL = [
   "./",
   "index.html",
@@ -23,6 +23,14 @@ self.addEventListener("activate", e => {
     )
   );
   self.clients.claim();
+});
+
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  e.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(cs => {
+    for (const c of cs) { if ("focus" in c) return c.focus(); }
+    if (clients.openWindow) return clients.openWindow("./");
+  }));
 });
 
 self.addEventListener("fetch", e => {

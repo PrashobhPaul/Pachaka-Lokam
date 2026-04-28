@@ -106,10 +106,25 @@
 
   <!-- ===== KITCHEN ===== -->
   <section id="kitchen" class="panel">
-    <div class="toolbar"><h2>What's in my Kitchen</h2><button class="btn" id="btn-reset-month">Reset Month</button></div>
-    <p class="hint">Update quantities as you use things. Tap <b>Out</b> to move to Grocery.</p>
+    <div class="toolbar">
+      <h2>What's in my Kitchen</h2>
+      <div class="row">
+        <button class="btn" id="btn-kitchen-select-all-empty" title="Select every empty item">☑ Select all empty</button>
+        <button class="btn" id="btn-reset-month">Reset Month</button>
+      </div>
+    </div>
+    <p class="hint">Tick boxes on multiple items, then use the bar at the bottom to bulk update — one save for everything.</p>
     <div id="kitchen-groups"></div>
   </section>
+
+  <!-- Floating bulk-action bar for Kitchen -->
+  <div id="kitchen-bulk-bar" class="bulk-bar" style="display:none">
+    <span id="kbb-count" class="bulk-count">0 selected</span>
+    <button class="btn xs primary" id="kbb-stock">✓ Restock to default</button>
+    <button class="btn xs" id="kbb-out">✗ Mark as Out</button>
+    <button class="btn xs" id="kbb-buy">+ Add to Grocery</button>
+    <button class="btn xs" id="kbb-clear">Clear</button>
+  </div>
 
   <!-- ===== GROCERY ===== -->
   <section id="grocery" class="panel">
@@ -158,6 +173,55 @@
     <!-- Reminders sub-panel -->
     <div id="rem-alerts" class="rem-panel active">
       <div class="toolbar" style="margin-top:14px"><h2>Smart Reminders</h2><button class="btn" id="btn-enable-notif">Enable Notifications</button></div>
+
+      <div class="card" style="margin:10px 0;padding:12px">
+        <div class="toolbar"><h3>🍽️ Meal Reminders</h3>
+          <label class="switch"><input type="checkbox" id="mr-enabled"/><span>Enabled</span></label>
+        </div>
+        <p class="hint">Get notified at meal-time with today's planned dish.</p>
+        <div class="add-row" style="flex-wrap:wrap;gap:8px">
+          <label>🌅 Breakfast <input type="time" id="mr-breakfast"/></label>
+          <label>🍛 Lunch <input type="time" id="mr-lunch"/></label>
+          <label>☕ Tea <input type="time" id="mr-tea"/></label>
+          <label>🌙 Dinner <input type="time" id="mr-dinner"/></label>
+          <button class="btn primary" id="btn-save-meal-rem">Save</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin:10px 0;padding:12px">
+        <div class="toolbar"><h3>💧 Water Reminders</h3>
+          <label class="switch"><input type="checkbox" id="wr-enabled"/><span>Enabled</span></label>
+        </div>
+        <p class="hint">Stay hydrated — get a gentle nudge every X minutes during your active hours.</p>
+        <div class="add-row" style="flex-wrap:wrap;gap:8px">
+          <label>Every <input type="number" id="wr-interval" min="15" max="240" step="15" style="width:70px"/> min</label>
+          <label>From <input type="time" id="wr-start"/></label>
+          <label>To <input type="time" id="wr-end"/></label>
+          <label>Goal <input type="number" id="wr-goal" min="1" max="20" style="width:60px"/> glasses/day</label>
+          <button class="btn primary" id="btn-save-water">Save</button>
+        </div>
+        <div class="water-tracker-row">
+          <div class="water-count-display" id="water-count-display">0 / 8 glasses today</div>
+          <div class="row">
+            <button class="btn xs primary" id="btn-water-drank">+ Drank a glass</button>
+            <button class="btn xs" id="btn-water-reset">Reset today</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin:10px 0;padding:12px">
+        <div class="toolbar"><h3>🎊 Festival Notifications</h3>
+          <label class="switch"><input type="checkbox" id="fn-enabled"/><span>Enabled</span></label>
+        </div>
+        <p class="hint">Morning alerts when a festival starts, peaks, or is approaching.</p>
+        <div class="add-row" style="flex-wrap:wrap;gap:8px">
+          <label>Morning alert at <input type="time" id="fn-time"/></label>
+          <label>Remind me <input type="number" id="fn-lead" min="1" max="14" style="width:60px"/> day(s) before</label>
+          <button class="btn primary" id="btn-save-fest-notif">Save</button>
+        </div>
+      </div>
+
+      <h3 style="margin-top:18px">Custom Reminders</h3>
       <div id="reminder-list"></div>
       <div class="add-row">
         <input id="r-title" placeholder="Reminder title" />

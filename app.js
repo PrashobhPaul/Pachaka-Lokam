@@ -4,9 +4,19 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const isoWeek = d => { const x=new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate()+4-(x.getDay()||7));
   const y=new Date(x.getFullYear(),0,1); return `${x.getFullYear()}-W${String(Math.ceil(((x-y)/86400000+1)/7)).padStart(2,"0")}`; };
-const todayKey = () => new Date().toISOString().slice(0,10);
-const monthKey = () => new Date().toISOString().slice(0,7);
+// Local-time keys (timezone-safe — avoids IST off-by-one from Date.toISOString)
+const pad2 = n => String(n).padStart(2,"0");
+const ymdLocal = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+const ymLocal  = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}`;
+const todayKey = () => ymdLocal(new Date());
+const monthKey = () => ymLocal(new Date());
 const fmtDate = d => new Date(d).toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short"});
+
+// Staple ingredients are assumed always available — never blocks a recipe.
+const STAPLE_INGREDIENTS = new Set([
+  "chilli","chilli powder","curry leaves","mustard","turmeric","cumin",
+  "ginger","garlic","salt","oil","masala powder","general spices"
+]);
 
 // ===== STORE =====
 const Store = {
@@ -32,6 +42,10 @@ const Store = {
       gasCylinder: { startDate: null },
       specialDays: [],       // [{id, date, title, type, meals:{breakfast,lunch,dinner}, recurring:bool}]
       vegRestrictions: { days: [], months: [] }, // days: [5] for Fridays; months: ["2026-04"]
+      mealReminders: { enabled: true, breakfast: "07:30", lunch: "12:30", tea: "16:30", dinner: "19:30" },
+      festivalNotifs: { enabled: true, leadDays: 1, morningTime: "08:00" },
+      waterReminder: { ...WATER_REMINDER_DEFAULT },
+      waterLog: {}, // { "YYYY-MM-DD": glassesCount }
     };
     this.save();
   },
@@ -49,6 +63,10 @@ const Store = {
     this.state.gasCylinder ||= { startDate: null };
     this.state.specialDays ||= [];
     this.state.vegRestrictions ||= { days: [], months: [] };
+    this.state.mealReminders ||= { enabled: true, breakfast: "07:30", lunch: "12:30", tea: "16:30", dinner: "19:30" };
+    this.state.festivalNotifs ||= { enabled: true, leadDays: 1, morningTime: "08:00" };
+    this.state.waterReminder ||= { ...WATER_REMINDER_DEFAULT };
+    this.state.waterLog ||= {};
     // Ensure new grocery items exist
     const existing = new Set(this.state.items.map(i => i.name));
     GROCERY_SEED.forEach(g => {
@@ -145,6 +163,10 @@ document.querySelectorAll(".tab").forEach(t => {
     if (t.dataset.tab === "meals") renderMealsTab();
     if (t.dataset.tab === "reminders") { renderReminders(); renderTracker(); }
     if (t.dataset.tab === "festivals") renderFestivalsPanel();
+    // Bulk action bar is only relevant on the kitchen tab.
+    const bar = document.getElementById("kitchen-bulk-bar");
+    if (bar && t.dataset.tab !== "kitchen") bar.style.display = "none";
+    else if (bar && t.dataset.tab === "kitchen") refreshKitchenBulkBar();
   };
 });
 
@@ -174,7 +196,9 @@ function renderFestivalBanner() {
     if (meals) {
       html += `<div class="fest-meals">`;
       for (const [slot, items] of Object.entries(meals)) {
-        html += `<div class="fest-dish"><span>${slot}</span>${Array.isArray(items) ? items.join(", ") : items}</div>`;
+        const txt = Array.isArray(items) ? items.join(", ") : items;
+        const icon = getMealIcon(Array.isArray(items) ? items[0] : items);
+        html += `<div class="fest-dish"><span>${slot}</span><span class="dish-emoji">${icon}</span>${txt}</div>`;
       }
       html += `</div>`;
     }
@@ -257,7 +281,7 @@ function renderToday() {
 
     const sel = card.querySelector("select");
     sel.innerHTML = options.map(o =>
-      `<option value="${o.name}" ${o.name===current?"selected":""}>${o.display}${o.fullyCookable?"":" ⚠"}</option>`
+      `<option value="${o.name}" ${o.name===current?"selected":""}>${getMealIcon(o.name)} ${o.display}${o.fullyCookable?"":" ⚠"}</option>`
     ).join("");
     // If no fully cookable options, show buy suggestions
     if (!options.some(o => o.fullyCookable) && options.length) {
@@ -266,18 +290,19 @@ function renderToday() {
     if (!options.length) sel.innerHTML = `<option>— nothing available —</option>`;
 
     const disp = card.querySelector(".today-meal-display");
+    const withIcon = (text, name) => `<span class="meal-emoji">${getMealIcon(name || text)}</span><span class="meal-name">${text}</span>`;
     if (festOverride) {
-      disp.textContent = Array.isArray(festMeals[id]) ? festMeals[id].join(", ") : festMeals[id];
+      const txt = Array.isArray(festMeals[id]) ? festMeals[id].join(", ") : festMeals[id];
+      disp.innerHTML = withIcon(txt, txt);
       disp.className = "today-meal-display festival";
     } else if (saved_meal && saved_meal.display) {
-      disp.textContent = saved_meal.display;
+      disp.innerHTML = withIcon(saved_meal.display, saved_meal.name);
       disp.className = "today-meal-display set";
     } else if (options.length && options[0].fullyCookable) {
-      disp.textContent = options[0].display;
+      disp.innerHTML = withIcon(options[0].display, options[0].name);
       disp.className = "today-meal-display suggestion";
     } else if (options.length) {
-      // Best partial match — show with buy prompt
-      disp.textContent = options[0].display + " ⚠";
+      disp.innerHTML = withIcon(options[0].display + " ⚠", options[0].name);
       disp.className = "today-meal-display suggestion partial";
     } else {
       disp.textContent = "No suggestion — stock basics";
@@ -398,6 +423,18 @@ document.getElementById("btn-today-suggest").onclick = () => {
 };
 
 // ===== KITCHEN =====
+// Bulk-edit selection set (item ids). When non-empty, the floating action bar appears.
+const kitchenSelected = new Set();
+
+function refreshKitchenBulkBar() {
+  const bar = document.getElementById("kitchen-bulk-bar");
+  if (!bar) return;
+  const n = kitchenSelected.size;
+  const countEl = document.getElementById("kbb-count");
+  if (countEl) countEl.textContent = `${n} selected`;
+  bar.style.display = n ? "flex" : "none";
+}
+
 function renderKitchen() {
   const root = document.getElementById("kitchen-groups"); root.innerHTML = "";
   const groups = {};
@@ -405,37 +442,105 @@ function renderKitchen() {
   Object.entries(groups).forEach(([cat, items]) => {
     const stocked = items.filter(i => i.qty > 0), empty = items.filter(i => i.qty === 0);
     const div = document.createElement("div"); div.className = "category";
-    div.innerHTML = `<h3>${cat} <span class="count">${stocked.length}/${items.length} stocked</span></h3>
+    div.innerHTML = `<h3><span class="cat-icon">${getCategoryIcon(cat)}</span>${cat} <span class="count">${stocked.length}/${items.length} stocked</span></h3>
       <div class="items stocked-grid"></div>
       ${empty.length ? `<details><summary>Not in kitchen (${empty.length})</summary><div class="items empty-grid"></div></details>` : ""}`;
     const sBox = div.querySelector(".stocked-grid"), eBox = div.querySelector(".empty-grid");
-    stocked.forEach(it => {
-      const el = document.createElement("div"); el.className = "item stocked";
-      el.innerHTML = `<span class="name">${it.name}</span>
-        <input type="number" class="qty" value="${it.qty}" min="0" step="${it.step}" />
-        <span class="unit">${it.unit}</span><button class="btn xs">Out</button>`;
-      const [, qty, , out] = el.children;
-      qty.onchange = () => { const v=parseFloat(qty.value)||0; it.qty=v; if(v===0) it.needsBuy=true; Store.save(); renderKitchen(); };
-      out.onclick = () => { it.qty=0; it.needsBuy=true; Store.save(); renderKitchen(); };
-      sBox.appendChild(el);
-    });
-    if (eBox) empty.forEach(it => {
-      const el = document.createElement("div"); el.className = "item empty";
-      el.innerHTML = `<span class="name">${it.name}</span><span class="unit">${it.unit}</span>
-        <button class="btn xs primary">Got it</button><button class="btn xs">+ Buy</button>`;
-      const [, , got, buy] = el.children;
-      got.onclick = () => { it.qty=it.defaultQty; it.needsBuy=false; Store.save(); renderKitchen(); };
-      buy.onclick = () => { it.needsBuy=true; Store.save(); renderKitchen(); };
-      eBox.appendChild(el);
-    });
+
+    const buildItem = (it, isStocked) => {
+      const el = document.createElement("div");
+      el.className = "item " + (isStocked ? "stocked" : "empty");
+      const checked = kitchenSelected.has(it.id) ? "checked" : "";
+      const icon = getItemIcon(it.name);
+      if (isStocked) {
+        el.innerHTML = `
+          <input type="checkbox" class="bulk-check" ${checked} aria-label="Select ${it.name}" />
+          <span class="item-icon">${icon}</span>
+          <span class="name">${it.name}</span>
+          <input type="number" class="qty" value="${it.qty}" min="0" step="${it.step}" />
+          <span class="unit">${it.unit}</span>
+          <button class="btn xs out-btn" type="button">Out</button>`;
+      } else {
+        el.innerHTML = `
+          <input type="checkbox" class="bulk-check" ${checked} aria-label="Select ${it.name}" />
+          <span class="item-icon">${icon}</span>
+          <span class="name">${it.name}</span>
+          <span class="unit">${it.unit}</span>
+          <button class="btn xs primary got-btn" type="button">Got it</button>
+          <button class="btn xs buy-btn" type="button">+ Buy</button>`;
+      }
+      const cb = el.querySelector(".bulk-check");
+      const toggleSelected = () => {
+        cb.checked = !cb.checked;
+        if (cb.checked) kitchenSelected.add(it.id); else kitchenSelected.delete(it.id);
+        el.classList.toggle("selected", cb.checked);
+        refreshKitchenBulkBar();
+      };
+      cb.onchange = () => {
+        if (cb.checked) kitchenSelected.add(it.id); else kitchenSelected.delete(it.id);
+        el.classList.toggle("selected", cb.checked);
+        refreshKitchenBulkBar();
+      };
+      // Tap on the row (but not on inputs/buttons) toggles selection — easier on mobile.
+      el.addEventListener("click", e => {
+        if (e.target === cb) return;
+        if (e.target.closest("input,button")) return;
+        toggleSelected();
+      });
+      if (kitchenSelected.has(it.id)) el.classList.add("selected");
+      const qty = el.querySelector(".qty");
+      if (qty) qty.onchange = () => { const v=parseFloat(qty.value)||0; it.qty=v; if(v===0) it.needsBuy=true; Store.save(); renderKitchen(); };
+      const out = el.querySelector(".out-btn");
+      if (out) out.onclick = e => { e.preventDefault(); it.qty=0; it.needsBuy=true; Store.save(); renderKitchen(); };
+      const got = el.querySelector(".got-btn");
+      if (got) got.onclick = e => { e.preventDefault(); it.qty=it.defaultQty; it.needsBuy=false; Store.save(); renderKitchen(); };
+      const buy = el.querySelector(".buy-btn");
+      if (buy) buy.onclick = e => { e.preventDefault(); it.needsBuy=true; Store.save(); renderKitchen(); };
+      return el;
+    };
+
+    stocked.forEach(it => sBox.appendChild(buildItem(it, true)));
+    if (eBox) empty.forEach(it => eBox.appendChild(buildItem(it, false)));
     root.appendChild(div);
   });
+  refreshKitchenBulkBar();
 }
+
+function applyBulkKitchen(action) {
+  if (!kitchenSelected.size) return;
+  let changed = 0;
+  Store.state.items.forEach(it => {
+    if (!kitchenSelected.has(it.id)) return;
+    if (action === "stock") { it.qty = it.defaultQty; it.needsBuy = false; changed++; }
+    else if (action === "out") { it.qty = 0; it.needsBuy = true; changed++; }
+    else if (action === "buy") { it.needsBuy = true; changed++; }
+  });
+  if (changed) {
+    kitchenSelected.clear();
+    Store.save();          // single bulk save
+    renderKitchen();
+  }
+}
+
 document.getElementById("btn-reset-month").onclick = () => {
   if (!confirm("Reset month?")) return;
   Store.state.items.forEach(it => { it.qty=0; it.needsBuy=true; });
   Store.save(); renderKitchen();
 };
+
+// Bulk action bar wiring (buttons live in the sticky bar in index.html). Script is at end-of-body
+// so DOM is already parsed when this executes.
+function wireKitchenBulkBar() {
+  const $ = id => document.getElementById(id);
+  if ($("kbb-stock"))  $("kbb-stock").onclick  = () => applyBulkKitchen("stock");
+  if ($("kbb-out"))    $("kbb-out").onclick    = () => applyBulkKitchen("out");
+  if ($("kbb-buy"))    $("kbb-buy").onclick    = () => applyBulkKitchen("buy");
+  if ($("kbb-clear"))  $("kbb-clear").onclick  = () => { kitchenSelected.clear(); renderKitchen(); };
+  if ($("btn-kitchen-select-all-empty")) $("btn-kitchen-select-all-empty").onclick = () => {
+    Store.state.items.filter(i => i.qty === 0).forEach(i => kitchenSelected.add(i.id));
+    renderKitchen();
+  };
+}
 
 // ===== GROCERY =====
 function renderGrocery() {
@@ -445,14 +550,16 @@ function renderGrocery() {
   const groups = {}; toBuy.forEach(it => { (groups[it.category] ||= []).push(it); });
   Object.entries(groups).forEach(([cat, items]) => {
     const div = document.createElement("div"); div.className = "category";
-    div.innerHTML = `<h3>${cat} <span class="count">${items.length}</span></h3><div class="items"></div>`;
+    div.innerHTML = `<h3><span class="cat-icon">${getCategoryIcon(cat)}</span>${cat} <span class="count">${items.length}</span></h3><div class="items"></div>`;
     const box = div.querySelector(".items");
     items.forEach(it => {
       const el = document.createElement("div"); el.className = "item";
-      el.innerHTML = `<span class="name">${it.name}</span>
+      el.innerHTML = `<span class="item-icon">${getItemIcon(it.name)}</span>
+        <span class="name">${it.name}</span>
         <input type="number" class="qty" value="${it.defaultQty}" min="0" step="${it.step}" />
         <span class="unit">${it.unit}</span><button class="btn xs primary">Bought</button>`;
-      const [, qty, , buy] = el.children;
+      const buy = el.querySelector("button");
+      const qty = el.querySelector(".qty");
       buy.onclick = () => { it.qty=parseFloat(qty.value)||it.defaultQty; it.needsBuy=false; Store.save(); renderGrocery(); };
       box.appendChild(el);
     });
@@ -462,7 +569,11 @@ function renderGrocery() {
 
 // ===== PANTRY MATCHING =====
 function pantry() { return new Set(Store.state.items.filter(i => i.qty > 0).map(i => i.name.toLowerCase())); }
-function has(token, p) { return p.has(token.toLowerCase()); }
+function has(token, p) {
+  const t = token.toLowerCase();
+  if (STAPLE_INGREDIENTS.has(t)) return true; // staples assumed always available
+  return p.has(t);
+}
 function pickAll(list, p)   { return list.filter(x => has(x, p)); }
 function pickFirst(list, p) { return list.find(x => has(x, p)); }
 
@@ -515,7 +626,18 @@ function tryCook(meal, p, strict = true, vegOnly = false) {
     ctx.curry = c || "Curry";
   }
   const display = meal.render ? meal.render(ctx) : meal.name;
-  return { name: meal.name, type: meal.type, display, simple: meal.simple, special: meal.special, missing: ctx.missing, nonVeg: meal.nonVeg };
+  return { name: meal.name, type: meal.type, display, simple: meal.simple, special: meal.special,
+           missing: ctx.missing, nonVeg: meal.nonVeg, priority: meal.priority || 99 };
+}
+
+// Weight by priority: lower number → more weight. Picks one element at random.
+function weightedPickByPriority(list) {
+  if (!list.length) return null;
+  const weights = list.map(c => Math.max(1, 6 - (c.priority || 5)));
+  const total = weights.reduce((s,w) => s+w, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < list.length; i++) { r -= weights[i]; if (r <= 0) return list[i]; }
+  return list[list.length - 1];
 }
 
 function pickMeal(slot, p, recent, bev, dateStr) {
@@ -541,13 +663,13 @@ function pickMeal(slot, p, recent, bev, dateStr) {
   if (!cookable.length) return null;
   if (slot === "lunch") {
     const specials = cookable.filter(c => c.special);
-    if (specials.length && Math.random() < 0.15) return specials[Math.floor(Math.random()*specials.length)];
+    if (specials.length && Math.random() < 0.15) return weightedPickByPriority(specials);
   }
   const normal = cookable.filter(c => !c.special);
   const cand = normal.length ? normal : cookable;
   const simple = cand.filter(c => c.simple);
   const pool2 = (simple.length && Math.random() < 0.8) ? simple : cand;
-  return pool2[Math.floor(Math.random()*pool2.length)];
+  return weightedPickByPriority(pool2);
 }
 
 function allCookable(slot, p, bev, dateStr) {
@@ -558,7 +680,10 @@ function allCookable(slot, p, bev, dateStr) {
   if (slot === "tea") pool = pool.filter(m => !m.beverage || m.beverage === "either" || bev === "either" || m.beverage === bev);
   return pool.map(m => tryCook(m, p, false, vegOnly)).filter(Boolean).map(c => ({
     ...c, fullyCookable: c.missing.length === 0
-  })).sort((a,b) => a.missing.length - b.missing.length);
+  })).sort((a,b) => {
+    if (a.missing.length !== b.missing.length) return a.missing.length - b.missing.length;
+    return (a.priority||99) - (b.priority||99); // priority 1 surfaces first
+  });
 }
 
 function generatePlan(startDate, days = 7) {
@@ -567,7 +692,7 @@ function generatePlan(startDate, days = 7) {
   const allMissing = new Set();
   for (let i = 0; i < days; i++) {
     const d = new Date(startDate); d.setDate(d.getDate()+i);
-    const key = d.toISOString().slice(0,10); const meals = {};
+    const key = ymdLocal(d); const meals = {};
     for (const slot of ["breakfast","lunch","tea","dinner"]) {
       const pick = pickMeal(slot, p, recent[slot].slice(-2), bev, key);
       if (pick) {
@@ -622,7 +747,7 @@ document.getElementById("btn-save-template").onclick = () => {
   const tpl = {};
   for (let i = 0; i < 7; i++) {
     const d = new Date(start); d.setDate(d.getDate()+i);
-    const key = d.toISOString().slice(0,10), dow = d.getDay();
+    const key = ymdLocal(d), dow = d.getDay();
     if (Store.state.plans[key]) tpl[dow] = Store.state.plans[key];
   }
   Store.state.template = tpl; Store.save();
@@ -636,7 +761,7 @@ document.getElementById("btn-apply-template").onclick = () => {
   const substitutions = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(start); d.setDate(d.getDate()+i);
-    const key = d.toISOString().slice(0,10), dow = d.getDay();
+    const key = ymdLocal(d), dow = d.getDay();
     const saved = tpl[dow]; if (!saved) continue;
     const meals = {};
     for (const slot of ["breakfast","lunch","tea","dinner"]) {
@@ -669,7 +794,7 @@ function loadExistingPlan() {
   const plan = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(start); d.setDate(d.getDate()+i);
-    const key = d.toISOString().slice(0,10);
+    const key = ymdLocal(d);
     if (Store.state.plans[key]) plan.push({ date: key, meals: Store.state.plans[key] });
   }
   if (plan.length) renderPlan(plan);
@@ -705,12 +830,13 @@ function renderPlan(plan) {
       });
       if (editMode) {
         const opts = allCookable(slot, p, bev, dayDate);
-        const sel = opts.map(o => `<option value="${o.name}" ${m.name===o.name?"selected":""}>${o.display}${o.fullyCookable?"":" ⚠"}</option>`).join("");
+        const sel = opts.map(o => `<option value="${o.name}" ${m.name===o.name?"selected":""}>${getMealIcon(o.name)} ${o.display}${o.fullyCookable?"":" ⚠"}</option>`).join("");
         html += `<div class="meal-row"><b>${icon} ${slot}</b>
           <select data-date="${d.date}" data-slot="${slot}">${sel || `<option>—</option>`}</select></div>`;
       } else {
         const miss = (m.missing||[]).length ? `<span class="miss">needs: ${m.missing.join(", ")}</span>` : "";
-        html += `<div class="meal-row${m.missing?.length?" partial":""}"><b>${icon} ${slot}</b>${m.display || "—"}${miss}</div>`;
+        const dishIcon = m.name ? `<span class="meal-emoji">${getMealIcon(m.name)}</span>` : "";
+        html += `<div class="meal-row${m.missing?.length?" partial":""}"><b>${icon} ${slot}</b>${dishIcon}${m.display || "—"}${miss}</div>`;
       }
     }
     card.innerHTML = html; grid.appendChild(card);
@@ -747,7 +873,7 @@ document.getElementById("btn-approve-all").onclick = () => {
   document.querySelectorAll("#missing-list .chip button[title=Approve]").forEach(b => b.click());
 };
 
-document.getElementById("plan-start").value = new Date().toISOString().slice(0,10);
+document.getElementById("plan-start").value = todayKey();
 
 // ===== FESTIVALS & SPECIAL DAYS PANEL =====
 function renderFestivalsPanel() {
@@ -913,6 +1039,95 @@ document.getElementById("btn-enable-notif").onclick = async () => {
   alert(res === "granted" ? "Enabled" : "Permission: " + res);
 };
 
+// ===== MEAL REMINDERS UI =====
+function initMealRemindersUI() {
+  const mr = Store.state.mealReminders;
+  const fn = Store.state.festivalNotifs;
+  const wr = Store.state.waterReminder;
+  const $ = id => document.getElementById(id);
+  if (!$("mr-enabled")) return;
+  $("mr-enabled").checked = !!mr.enabled;
+  $("mr-breakfast").value = mr.breakfast || "";
+  $("mr-lunch").value = mr.lunch || "";
+  $("mr-tea").value = mr.tea || "";
+  $("mr-dinner").value = mr.dinner || "";
+  $("fn-enabled").checked = !!fn.enabled;
+  $("fn-time").value = fn.morningTime || "08:00";
+  $("fn-lead").value = fn.leadDays || 1;
+  // Water reminder
+  if ($("wr-enabled")) {
+    $("wr-enabled").checked = !!wr.enabled;
+    $("wr-interval").value = wr.intervalMinutes || 60;
+    $("wr-start").value = wr.startTime || "08:00";
+    $("wr-end").value = wr.endTime || "22:00";
+    $("wr-goal").value = wr.glassesGoal || 8;
+    refreshWaterCount();
+  }
+
+  $("btn-save-meal-rem").onclick = () => {
+    Store.state.mealReminders = {
+      enabled: $("mr-enabled").checked,
+      breakfast: $("mr-breakfast").value || null,
+      lunch: $("mr-lunch").value || null,
+      tea: $("mr-tea").value || null,
+      dinner: $("mr-dinner").value || null,
+    };
+    Store.save();
+    alert("Meal reminders saved.");
+  };
+  $("btn-save-fest-notif").onclick = () => {
+    Store.state.festivalNotifs = {
+      enabled: $("fn-enabled").checked,
+      morningTime: $("fn-time").value || "08:00",
+      leadDays: Math.max(1, Math.min(14, parseInt($("fn-lead").value,10) || 1)),
+    };
+    Store.save();
+    alert("Festival notifications saved.");
+  };
+  $("mr-enabled").onchange = () => { Store.state.mealReminders.enabled = $("mr-enabled").checked; Store.save(); };
+  $("fn-enabled").onchange = () => { Store.state.festivalNotifs.enabled = $("fn-enabled").checked; Store.save(); };
+
+  // Water reminder wiring
+  if ($("wr-enabled")) {
+    $("wr-enabled").onchange = () => {
+      Store.state.waterReminder.enabled = $("wr-enabled").checked;
+      Store.save();
+    };
+    $("btn-save-water").onclick = () => {
+      const interval = Math.max(15, Math.min(240, parseInt($("wr-interval").value, 10) || 60));
+      Store.state.waterReminder = {
+        enabled: $("wr-enabled").checked,
+        intervalMinutes: interval,
+        startTime: $("wr-start").value || "08:00",
+        endTime: $("wr-end").value || "22:00",
+        glassesGoal: Math.max(1, Math.min(20, parseInt($("wr-goal").value, 10) || 8)),
+      };
+      Store.save();
+      alert("Water reminder saved.");
+    };
+    if ($("btn-water-drank")) $("btn-water-drank").onclick = () => {
+      const k = todayKey();
+      Store.state.waterLog[k] = (Store.state.waterLog[k] || 0) + 1;
+      Store.save();
+      refreshWaterCount();
+    };
+    if ($("btn-water-reset")) $("btn-water-reset").onclick = () => {
+      delete Store.state.waterLog[todayKey()];
+      Store.save();
+      refreshWaterCount();
+    };
+  }
+}
+
+function refreshWaterCount() {
+  const el = document.getElementById("water-count-display");
+  if (!el) return;
+  const goal = Store.state.waterReminder.glassesGoal || 8;
+  const count = Store.state.waterLog[todayKey()] || 0;
+  el.textContent = `${count} / ${goal} glasses today`;
+  el.className = "water-count-display" + (count >= goal ? " goal-met" : "");
+}
+
 // ===== REMINDER SUB-TABS =====
 document.querySelectorAll(".rem-tab").forEach(t => {
   t.onclick = () => {
@@ -1016,12 +1231,17 @@ function renderTrackerMonth() {
 
 document.getElementById("tracker-prev").onclick = () => {
   const [yr, mo] = trackerMonth.split("-").map(Number);
-  trackerMonth = new Date(yr, mo-2, 1).toISOString().slice(0,7);
+  // Walk back one month without going through Date->ISO (which shifts to UTC and breaks IST).
+  const newMo = mo === 1 ? 12 : mo - 1;
+  const newYr = mo === 1 ? yr - 1 : yr;
+  trackerMonth = `${newYr}-${pad2(newMo)}`;
   renderTrackerMonth();
 };
 document.getElementById("tracker-next").onclick = () => {
   const [yr, mo] = trackerMonth.split("-").map(Number);
-  trackerMonth = new Date(yr, mo, 1).toISOString().slice(0,7);
+  const newMo = mo === 12 ? 1 : mo + 1;
+  const newYr = mo === 12 ? yr + 1 : yr;
+  trackerMonth = `${newYr}-${pad2(newMo)}`;
   renderTrackerMonth();
 };
 
@@ -1053,19 +1273,136 @@ function initFestivalMode() {
 }
 
 // ===== NOTIFICATION CHECK =====
+function fireNotif(title, body, tag) {
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+      navigator.serviceWorker.ready.then(reg => {
+        reg.showNotification(title, { body, icon: "assets/logo.png", badge: "assets/logo.png", tag });
+      }).catch(() => new Notification(title, { body, icon: "assets/logo.png", tag }));
+    } else {
+      new Notification(title, { body, icon: "assets/logo.png", tag });
+    }
+  } catch { try { new Notification(title, { body, icon: "assets/logo.png" }); } catch {} }
+}
+
+function mealTextFor(slot, dateKey) {
+  const region = getRegion();
+  const active = FestivalService.getActive(region);
+  const festMode = Store.state.settings.festivalMode;
+  const festMeals = active ? FestivalService.getTodaysMeals(active) : null;
+  if (festMeals && festMeals[slot] && festMode === "override") {
+    return Array.isArray(festMeals[slot]) ? festMeals[slot].join(", ") : festMeals[slot];
+  }
+  const special = getSpecialDay(dateKey);
+  if (special && special.meals && special.meals[slot]) return special.meals[slot];
+  const saved = Store.state.plans[dateKey];
+  if (saved && saved[slot] && saved[slot].display) return saved[slot].display;
+  if (saved && saved[slot] && saved[slot].name) return saved[slot].name;
+  // Fallback: first cookable suggestion
+  try {
+    const p = pantry();
+    const bev = Store.state.settings.beverage;
+    const opts = allCookable(slot, p, bev, dateKey);
+    if (opts && opts.length) return opts[0].display || opts[0].name;
+  } catch {}
+  return null;
+}
+
 function checkReminders() {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   const now = new Date(), today = now.toISOString().slice(0,10), hhmm = now.toTimeString().slice(0,5);
+  Store.state.notifiedDates ||= {};
+
+  // --- Custom user reminders ---
   Store.state.reminders.forEach(r => {
     if (!r.active || !r.time || r.time !== hhmm) return;
     if (r.frequency === "weekly" && now.getDay() !== 1) return;
     const stamp = today + "-" + hhmm;
     if (Store.state.notifiedDates[r.id] === stamp) return;
-    new Notification("Pachaka Lokam", { body: r.title, icon: "assets/logo.png" });
+    fireNotif("Pachaka Lokam", r.title, "rem-" + r.id);
     Store.state.notifiedDates[r.id] = stamp; Store.save();
   });
+
+  // --- Meal reminders ---
+  const mr = Store.state.mealReminders;
+  if (mr && mr.enabled) {
+    ["breakfast","lunch","tea","dinner"].forEach(slot => {
+      if (mr[slot] !== hhmm) return;
+      const key = "meal-" + slot + "-" + today;
+      if (Store.state.notifiedDates[key]) return;
+      const meal = mealTextFor(slot, today);
+      const labelMap = { breakfast:"🌅 Breakfast", lunch:"🍛 Lunch", tea:"☕ Evening Tea", dinner:"🌙 Dinner" };
+      const body = meal ? `${labelMap[slot]}: ${meal}` : `${labelMap[slot]} time — plan your meal`;
+      fireNotif("Pachaka Lokam", body, key);
+      Store.state.notifiedDates[key] = 1; Store.save();
+    });
+  }
+
+  // --- Water reminders ---
+  // Fires at every interval slot between startTime and endTime. One notification per slot
+  // per day, deduped via notifiedDates so reopening the app doesn't refire.
+  const wr = Store.state.waterReminder;
+  if (wr && wr.enabled) {
+    const [sH, sM] = (wr.startTime || "08:00").split(":").map(Number);
+    const [eH, eM] = (wr.endTime   || "22:00").split(":").map(Number);
+    const nowMin = now.getHours()*60 + now.getMinutes();
+    const startMin = sH*60 + sM, endMin = eH*60 + eM;
+    if (nowMin >= startMin && nowMin <= endMin) {
+      const interval = Math.max(15, wr.intervalMinutes || 60);
+      const slot = Math.floor((nowMin - startMin) / interval);
+      const slotMin = startMin + slot * interval;
+      // Fire only within the first 2 minutes of the slot (so we don't miss it if the timer ticks late).
+      if (nowMin - slotMin <= 2) {
+        const wkey = `water-${today}-${slot}`;
+        if (!Store.state.notifiedDates[wkey]) {
+          const drank = Store.state.waterLog[today] || 0;
+          const goal = wr.glassesGoal || 8;
+          fireNotif("💧 Water Reminder",
+            `Time for a glass of water! (${drank}/${goal} today)`, wkey);
+          Store.state.notifiedDates[wkey] = 1;
+          Store.save();
+        }
+      }
+    }
+  }
+
+  // --- Festival notifications ---
+  const fn = Store.state.festivalNotifs;
+  if (fn && fn.enabled && fn.morningTime === hhmm) {
+    const region = getRegion();
+    const active = FestivalService.getActive(region);
+    if (active) {
+      const dayIdx = FestivalService.getDayIndex(active);
+      const isStart = active.start === today;
+      const isPeak = FestivalService.isPeakDay(active);
+      const key = "fest-" + active.name + "-" + today;
+      if (!Store.state.notifiedDates[key]) {
+        let body;
+        if (isStart) body = `${active.greeting} — ${active.name} starts today!`;
+        else if (isPeak) body = `${active.greeting} — Today is the peak of ${active.name}!`;
+        else body = `${active.name} — Day ${dayIdx+1} in progress`;
+        fireNotif("🎊 Festival", body, key);
+        Store.state.notifiedDates[key] = 1; Store.save();
+      }
+    } else {
+      const next = FestivalService.getNext(region);
+      if (next) {
+        const daysUntil = Math.floor((new Date(next.start) - new Date(today)) / 86400000);
+        if (daysUntil > 0 && daysUntil <= (fn.leadDays || 1)) {
+          const key = "fest-up-" + next.name + "-" + today;
+          if (!Store.state.notifiedDates[key]) {
+            fireNotif("🎊 Upcoming Festival",
+              `${next.name} in ${daysUntil} day${daysUntil===1?"":"s"} — prep your list!`, key);
+            Store.state.notifiedDates[key] = 1; Store.save();
+          }
+        }
+      }
+    }
+  }
 }
 setInterval(checkReminders, 30*1000);
+// Run once on load (in case user opens app at reminder time)
+setTimeout(checkReminders, 2000);
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
 
@@ -1073,6 +1410,8 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catc
 Store.load();
 initRegionSelector();
 initFestivalMode();
+initMealRemindersUI();
+wireKitchenBulkBar();
 renderFestivalBanner();
 renderToday();
 renderKitchen();

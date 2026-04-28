@@ -1,0 +1,37 @@
+{
+  "packageId": "com.pachakalokam.app",
+  "host": "pachakalokam.example.com",
+  "name": "Pachaka Lokam",
+  "launcherName": "Pachaka Lokam",
+  "display": "standalone",
+  "themeColor": "#1fa34a",
+  "navigationColor": "#1fa34a",
+  "navigationColorDark": "#1fa34a",
+  "navigationDividerColor": "#1fa34a",
+  "navigationDividerColorDark": "#1fa34a",
+  "backgroundColor": "#fffdf7",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://pachakalokam.example.com/assets/logo.png",
+  "maskableIconUrl": "https://pachakalokam.example.com/assets/logo.png",
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    { "name": "Today", "shortName": "Today", "url": "/?tab=today", "iconUrl": "https://pachakalokam.example.com/assets/logo.png" },
+    { "name": "Grocery", "shortName": "Grocery", "url": "/?tab=grocery", "iconUrl": "https://pachakalokam.example.com/assets/logo.png" }
+  ],
+  "signingKey": { "path": "./android.keystore", "alias": "android" },
+  "splashScreenFadeOutDuration": 300,
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": { "enabled": false },
+    "playBilling": { "enabled": false }
+  },
+  "orientation": "portrait",
+  "fingerprints": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://pachakalokam.example.com/manifest.webmanifest",
+  "fullScopeUrl": "https://pachakalokam.example.com/",
+  "minSdkVersion": 21,
+  "serviceAccountJsonFile": ""
+}
