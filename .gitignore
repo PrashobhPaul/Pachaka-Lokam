@@ -3,3 +3,23 @@ Thumbs.db
 node_modules/
 *.zip
 .env
+
+# Build artifacts (Bubblewrap / Android)
+app/
+build/
+.gradle/
+local.properties
+*.aab
+*.apk
+*.idsig
+
+# Signing material — NEVER commit
+*.keystore
+*.jks
+android.keystore
+keystore.properties
+*.pepk
+
+# Bubblewrap working files
+.bubblewrap/
+twa-manifest.json.bak

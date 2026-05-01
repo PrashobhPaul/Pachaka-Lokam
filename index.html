@@ -4,12 +4,46 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <meta name="theme-color" content="#1fa34a" />
-<title>Pachaka Lokam</title>
+<meta name="description" content="South Indian kitchen companion — grocery tracking, smart meal planning, festival menus, and household reminders for Kerala, Tamil Nadu, Andhra, Telangana & Karnataka." />
+<meta name="application-name" content="Pachaka Lokam" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Pachaka Lokam" />
+<meta name="format-detection" content="telephone=no" />
+<meta property="og:title" content="Pachaka Lokam — Kitchen & Meal Planner" />
+<meta property="og:description" content="From grocery to meal, simplified. South Indian kitchen companion." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="assets/logo.png" />
+<meta name="twitter:card" content="summary" />
+<title>Pachaka Lokam — South Indian Kitchen & Meal Planner</title>
 <link rel="icon" href="assets/logo.png" />
+<link rel="apple-touch-icon" href="assets/logo.png" />
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="stylesheet" href="app.css" />
+<style id="pl-splash-style">
+  #pl-splash{position:fixed;inset:0;z-index:9999;background:#fffdf7;display:flex;
+    flex-direction:column;align-items:center;justify-content:center;
+    transition:opacity .35s ease;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  #pl-splash img{width:120px;height:120px;border-radius:28px;
+    box-shadow:0 8px 24px rgba(31,163,74,.18);animation:pl-pop .5s ease}
+  #pl-splash h1{margin:18px 0 6px;color:#1fa34a;font-size:22px;letter-spacing:.3px}
+  #pl-splash p{margin:0;color:#666;font-size:13px}
+  #pl-splash .pl-bar{margin-top:22px;width:140px;height:3px;background:#eadfc7;border-radius:2px;overflow:hidden}
+  #pl-splash .pl-bar i{display:block;height:100%;width:40%;background:#1fa34a;border-radius:2px;
+    animation:pl-slide 1.1s infinite ease-in-out}
+  @keyframes pl-pop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
+  @keyframes pl-slide{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
+  body.pl-ready #pl-splash{opacity:0;pointer-events:none}
+</style>
 </head>
 <body>
+<div id="pl-splash" role="status" aria-label="Loading Pachaka Lokam">
+  <img src="assets/logo.png" alt=""/>
+  <h1>Pachaka Lokam</h1>
+  <p>From grocery to meal, simplified.</p>
+  <div class="pl-bar"><i></i></div>
+</div>
 <header class="hero">
   <img src="assets/logo.png" class="logo" />
   <div>

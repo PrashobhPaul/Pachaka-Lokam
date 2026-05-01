@@ -1,6 +1,6 @@
 {
   "packageId": "com.pachakalokam.app",
-  "host": "pachakalokam.example.com",
+  "host": "pachakalokam.prashobhpaul.com",
   "name": "Pachaka Lokam",
   "launcherName": "Pachaka Lokam",
   "display": "standalone",
@@ -12,13 +12,13 @@
   "backgroundColor": "#fffdf7",
   "enableNotifications": true,
   "startUrl": "/",
-  "iconUrl": "https://pachakalokam.example.com/assets/logo.png",
-  "maskableIconUrl": "https://pachakalokam.example.com/assets/logo.png",
+  "iconUrl": "https://pachakalokam.prashobhpaul.com/assets/logo.png",
+  "maskableIconUrl": "https://pachakalokam.prashobhpaul.com/assets/logo.png",
   "appVersionName": "1.0.0",
   "appVersionCode": 1,
   "shortcuts": [
-    { "name": "Today", "shortName": "Today", "url": "/?tab=today", "iconUrl": "https://pachakalokam.example.com/assets/logo.png" },
-    { "name": "Grocery", "shortName": "Grocery", "url": "/?tab=grocery", "iconUrl": "https://pachakalokam.example.com/assets/logo.png" }
+    { "name": "Today", "shortName": "Today", "url": "/?tab=today", "iconUrl": "https://pachakalokam.prashobhpaul.com/assets/logo.png" },
+    { "name": "Grocery", "shortName": "Grocery", "url": "/?tab=grocery", "iconUrl": "https://pachakalokam.prashobhpaul.com/assets/logo.png" }
   ],
   "signingKey": { "path": "./android.keystore", "alias": "android" },
   "splashScreenFadeOutDuration": 300,
@@ -30,8 +30,8 @@
   "orientation": "portrait",
   "fingerprints": [],
   "generatorApp": "bubblewrap-cli",
-  "webManifestUrl": "https://pachakalokam.example.com/manifest.webmanifest",
-  "fullScopeUrl": "https://pachakalokam.example.com/",
+  "webManifestUrl": "https://pachakalokam.prashobhpaul.com/manifest.webmanifest",
+  "fullScopeUrl": "https://pachakalokam.prashobhpaul.com/",
   "minSdkVersion": 21,
   "serviceAccountJsonFile": ""
 }

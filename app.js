@@ -150,23 +150,36 @@ const FestivalService = {
   },
 };
 
+// ===== DEEP-LINK FROM MANIFEST SHORTCUTS (?tab=grocery etc.) =====
+function activateTabFromQuery() {
+  const params = new URLSearchParams(location.search);
+  const target = params.get("tab");
+  if (!target) return;
+  const tabBtn = document.querySelector(`.tab[data-tab="${target}"]`);
+  if (tabBtn) tabBtn.click();
+}
+
 // ===== TAB NAVIGATION =====
 document.querySelectorAll(".tab").forEach(t => {
   t.onclick = () => {
-    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
-    document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
-    t.classList.add("active");
-    document.getElementById(t.dataset.tab).classList.add("active");
-    if (t.dataset.tab === "today") renderToday();
-    if (t.dataset.tab === "grocery") renderGrocery();
-    if (t.dataset.tab === "kitchen") renderKitchen();
-    if (t.dataset.tab === "meals") renderMealsTab();
-    if (t.dataset.tab === "reminders") { renderReminders(); renderTracker(); }
-    if (t.dataset.tab === "festivals") renderFestivalsPanel();
-    // Bulk action bar is only relevant on the kitchen tab.
-    const bar = document.getElementById("kitchen-bulk-bar");
-    if (bar && t.dataset.tab !== "kitchen") bar.style.display = "none";
-    else if (bar && t.dataset.tab === "kitchen") refreshKitchenBulkBar();
+    try {
+      document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
+      t.classList.add("active");
+      const panel = document.getElementById(t.dataset.tab);
+      if (panel) panel.classList.add("active");
+      const safe = fn => { try { typeof fn === "function" && fn(); } catch (err) { console.error("[PL] tab render failed:", t.dataset.tab, err); } };
+      if (t.dataset.tab === "today") safe(renderToday);
+      if (t.dataset.tab === "grocery") safe(renderGrocery);
+      if (t.dataset.tab === "kitchen") safe(renderKitchen);
+      if (t.dataset.tab === "meals") safe(renderMealsTab);
+      if (t.dataset.tab === "reminders") { safe(renderReminders); safe(renderTracker); }
+      if (t.dataset.tab === "festivals") safe(renderFestivalsPanel);
+      // Bulk action bar is only relevant on the kitchen tab.
+      const bar = document.getElementById("kitchen-bulk-bar");
+      if (bar && t.dataset.tab !== "kitchen") bar.style.display = "none";
+      else if (bar && t.dataset.tab === "kitchen") { try { refreshKitchenBulkBar(); } catch {} }
+    } catch (err) { console.error("[PL] tab switch failed:", err); }
   };
 });
 
@@ -1404,16 +1417,114 @@ setInterval(checkReminders, 30*1000);
 // Run once on load (in case user opens app at reminder time)
 setTimeout(checkReminders, 2000);
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").then(reg => {
+    // When a new SW takes over, refresh once so users get the latest shell.
+    if (reg && reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
+    reg && reg.addEventListener && reg.addEventListener("updatefound", () => {
+      const sw = reg.installing;
+      if (!sw) return;
+      sw.addEventListener("statechange", () => {
+        if (sw.state === "installed" && navigator.serviceWorker.controller) {
+          // New version ready — silent swap on next reload
+          sw.postMessage && sw.postMessage("SKIP_WAITING");
+        }
+      });
+    });
+  }).catch(() => {});
+}
+
+// ===== ONLINE/OFFLINE BANNER =====
+function updateNetworkBanner() {
+  let bar = document.getElementById("pl-net-banner");
+  if (!navigator.onLine) {
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "pl-net-banner";
+      bar.textContent = "📴 Offline — your data stays on this device";
+      bar.style.cssText = "position:sticky;top:0;z-index:50;background:#444;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:600";
+      document.body.prepend(bar);
+    }
+  } else if (bar) { bar.remove(); }
+}
+window.addEventListener("online", updateNetworkBanner);
+window.addEventListener("offline", updateNetworkBanner);
+
+// ===== GLOBAL ERROR GUARDS =====
+// One bad render must never break a tab. Log & let user keep using the app.
+window.addEventListener("error", e => {
+  console.error("[PL] runtime error:", e.error || e.message);
+});
+window.addEventListener("unhandledrejection", e => {
+  console.error("[PL] unhandled promise:", e.reason);
+});
+
+// Wrap every render* function so a thrown error in one tab can't kill the app.
+function _safeWrap(name) {
+  const fn = window[name];
+  if (typeof fn !== "function") return;
+  window[name] = function safe(...args) {
+    try { return fn.apply(this, args); }
+    catch (err) {
+      console.error(`[PL] ${name} failed:`, err);
+      // Best-effort inline error so a tab is never blank
+      try {
+        const idMap = {
+          renderToday: "today", renderKitchen: "kitchen", renderGrocery: "grocery",
+          renderMealsTab: "meals", renderReminders: "reminder-list",
+          renderTracker: "rem-tracker", renderFestivalsPanel: "festivals",
+          renderFestivalBanner: "festival-banner",
+        };
+        const target = document.getElementById(idMap[name]);
+        if (target && !target.dataset.plErrored) {
+          target.dataset.plErrored = "1";
+          const note = document.createElement("div");
+          note.style.cssText = "padding:12px;margin:10px;background:#fff3cd;border:1px solid #ffe08a;border-radius:8px;color:#7a5b00;font-size:13px";
+          note.innerHTML = `⚠ Couldn't render this section. Your data is safe — try switching tabs and back. <button class="btn xs" onclick="location.reload()">Reload</button>`;
+          target.appendChild(note);
+        }
+      } catch {}
+      return null;
+    }
+  };
+}
+[
+  "renderToday","renderKitchen","renderGrocery","renderMealsTab",
+  "renderReminders","renderTracker","renderTrackerMonth",
+  "renderFestivalsPanel","renderFestivalBanner","renderGasCylinderWidget",
+  "initMealRemindersUI","initRegionSelector","initFestivalMode",
+].forEach(_safeWrap);
+
+// ===== SPLASH DISMISSAL =====
+function dismissSplash() {
+  document.body.classList.add("pl-ready");
+  setTimeout(() => {
+    const s = document.getElementById("pl-splash");
+    if (s) s.remove();
+    const ss = document.getElementById("pl-splash-style");
+    if (ss) ss.remove();
+  }, 450);
+}
 
 // ===== INIT =====
-Store.load();
-initRegionSelector();
-initFestivalMode();
-initMealRemindersUI();
-wireKitchenBulkBar();
-renderFestivalBanner();
-renderToday();
-renderKitchen();
-renderReminders();
-renderMealsTab();
+(function bootstrap() {
+  try { Store.load(); }
+  catch (err) {
+    console.error("[PL] Store.load failed, recovering with defaults:", err);
+    try { localStorage.removeItem(STORAGE_KEY); Store.load(); } catch {}
+  }
+  // Each step is independent — failure in one won't stop the others.
+  const steps = [
+    initRegionSelector, initFestivalMode, initMealRemindersUI, wireKitchenBulkBar,
+    renderFestivalBanner, renderToday, renderKitchen,
+    renderReminders, renderMealsTab, activateTabFromQuery,
+    updateNetworkBanner,
+  ];
+  steps.forEach(fn => {
+    try { typeof fn === "function" && fn(); }
+    catch (err) { console.error("[PL] init step failed:", fn && fn.name, err); }
+  });
+  try { dismissSplash(); } catch {}
+})();
+// Belt-and-braces: dismiss splash after 4s no matter what
+setTimeout(() => { try { dismissSplash(); } catch {} }, 4000);
