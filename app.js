@@ -1434,6 +1434,206 @@ if ("serviceWorker" in navigator) {
   }).catch(() => {});
 }
 
+// ===== CAPACITOR BRIDGE (only when wrapped in native shell) =====
+const PL_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
+async function plScheduleNativeNotif(title, body, atDate, id) {
+  if (!PL_NATIVE) return;
+  try {
+    const { LocalNotifications } = window.Capacitor.Plugins || {};
+    if (!LocalNotifications) return;
+    const perm = await LocalNotifications.checkPermissions();
+    if (perm.display !== "granted") await LocalNotifications.requestPermissions();
+    await LocalNotifications.schedule({
+      notifications: [{
+        title, body, id: id || Math.floor(Math.random()*1e9),
+        schedule: { at: atDate, allowWhileIdle: true },
+        smallIcon: "ic_stat_icon", iconColor: "#1fa34a",
+      }]
+    });
+  } catch (err) { console.warn("[PL] native notif schedule failed:", err); }
+}
+
+// Hide Capacitor's native splash once the web UI has actually painted.
+if (PL_NATIVE) {
+  window.addEventListener("DOMContentLoaded", async () => {
+    try {
+      const { SplashScreen } = window.Capacitor.Plugins || {};
+      SplashScreen && SplashScreen.hide && SplashScreen.hide();
+    } catch {}
+  });
+}
+
+// ===== PWA INSTALL PROMPT =====
+// The install button is ALWAYS visible (until installed). When clicked:
+//  - If Chrome captured `beforeinstallprompt` → show native prompt instantly
+//  - Otherwise → show a guided modal with platform-specific steps
+let _deferredInstallPrompt = null;
+
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches
+    || window.navigator.standalone === true
+    || document.referrer.startsWith("android-app://");
+}
+function plUA() { return navigator.userAgent || ""; }
+function isIOS() { return /iPhone|iPad|iPod/i.test(plUA()) && !window.MSStream; }
+function isAndroid() { return /Android/i.test(plUA()); }
+function isChrome() { return /Chrome|CriOS/i.test(plUA()) && !/Edg|OPR|SamsungBrowser/i.test(plUA()); }
+function isSamsung() { return /SamsungBrowser/i.test(plUA()); }
+function isFirefox() { return /Firefox|FxiOS/i.test(plUA()); }
+function isEdge() { return /Edg/i.test(plUA()); }
+
+function platformLabel() {
+  if (isIOS()) return "iOS Safari";
+  if (isAndroid() && isChrome()) return "Chrome on Android";
+  if (isAndroid() && isSamsung()) return "Samsung Internet";
+  if (isAndroid() && isFirefox()) return "Firefox on Android";
+  if (isAndroid()) return "Android";
+  if (isChrome()) return "Chrome (desktop)";
+  if (isEdge()) return "Edge (desktop)";
+  return "your browser";
+}
+
+function setInstallVisible(show) {
+  const btn1 = document.getElementById("pl-install-btn");
+  const btn2 = document.getElementById("pl-install-btn-2");
+  const card = document.getElementById("pl-install-card");
+  if (btn1) btn1.classList.toggle("hide", !show);
+  if (card) card.style.display = show ? "block" : "none";
+  if (btn2) btn2.style.display = show ? "inline-flex" : "none";
+}
+
+function buildInstallSteps() {
+  const stepsEl = document.getElementById("pl-install-steps");
+  const introEl = document.getElementById("pl-install-intro");
+  const doBtn   = document.getElementById("pl-install-do");
+  if (!stepsEl) return;
+  let html = "", showDoBtn = false;
+
+  if (_deferredInstallPrompt) {
+    introEl && (introEl.textContent = "Tap the green button below — we'll handle the rest.");
+    html = "";
+    showDoBtn = true;
+  } else if (isIOS()) {
+    introEl && (introEl.textContent = "On iOS, install via the Share menu (Apple's rules).");
+    html = `<ol>
+      <li>Tap the <b>Share</b> icon <span style="font-size:18px">⬆️</span> at the bottom of Safari.</li>
+      <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
+      <li>Tap <b>Add</b> in the top-right.</li>
+    </ol>`;
+  } else if (isAndroid() && isChrome()) {
+    introEl && (introEl.textContent = "Chrome should show an Install option in its menu.");
+    html = `<ol>
+      <li>Tap the <b>⋮ menu</b> (top-right of Chrome).</li>
+      <li>Tap <b>Install app</b> or <b>Add to Home screen</b>.</li>
+      <li>Tap <b>Install</b> to confirm.</li>
+    </ol>
+    <p class="pl-mini">If you don't see "Install app", reload the page once — Chrome sometimes needs a second visit to register the app.</p>`;
+  } else if (isAndroid() && isSamsung()) {
+    introEl && (introEl.textContent = "Samsung Internet supports installing this app.");
+    html = `<ol>
+      <li>Tap the <b>menu</b> (☰ at the bottom).</li>
+      <li>Tap <b>Add page to</b> → <b>Home screen</b>.</li>
+    </ol>`;
+  } else if (isAndroid() && isFirefox()) {
+    introEl && (introEl.textContent = "Firefox can install this app on Android.");
+    html = `<ol>
+      <li>Tap the <b>⋮ menu</b>.</li>
+      <li>Tap <b>Install</b> or <b>Add to Home screen</b>.</li>
+    </ol>`;
+  } else {
+    introEl && (introEl.textContent = "Use the install icon in your browser's address bar.");
+    html = `<ol>
+      <li>Look for an <b>install icon</b> in the address bar (usually right side).</li>
+      <li>Click it and confirm <b>Install</b>.</li>
+    </ol>
+    <p class="pl-mini">Or: browser menu → "Install Pachaka Lokam" / "Apps" → "Install this site as an app".</p>`;
+  }
+  stepsEl.innerHTML = html;
+  if (doBtn) doBtn.style.display = showDoBtn ? "inline-flex" : "none";
+}
+
+async function triggerInstall() {
+  // Already installed?
+  if (isStandalone()) {
+    alert("Pachaka Lokam is already installed on this device. Open it from your home screen.");
+    return;
+  }
+  // Native prompt available — fire it directly
+  if (_deferredInstallPrompt) {
+    try {
+      _deferredInstallPrompt.prompt();
+      const { outcome } = await _deferredInstallPrompt.userChoice;
+      _deferredInstallPrompt = null;
+      if (outcome === "accepted") setInstallVisible(false);
+      else openInstallModal(); // user dismissed → show manual steps
+      return;
+    } catch (err) { console.warn("[PL] native install failed, falling back:", err); }
+  }
+  openInstallModal();
+}
+
+function openInstallModal() {
+  buildInstallSteps();
+  const m = document.getElementById("pl-install-modal");
+  if (m) m.classList.add("show");
+}
+function closeInstallModal() {
+  const m = document.getElementById("pl-install-modal");
+  if (m) m.classList.remove("show");
+}
+
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();
+  _deferredInstallPrompt = e;
+  if (!isStandalone()) setInstallVisible(true);
+  console.log("[PL] beforeinstallprompt captured — quick-install ready");
+});
+window.addEventListener("appinstalled", () => {
+  _deferredInstallPrompt = null;
+  setInstallVisible(false);
+  closeInstallModal();
+  console.log("[PL] App installed");
+});
+
+function initInstallUI() {
+  // If already installed → hide everything
+  if (isStandalone()) { setInstallVisible(false); return; }
+
+  // ALWAYS show install affordances on web (don't wait for beforeinstallprompt)
+  setInstallVisible(true);
+
+  const btn1 = document.getElementById("pl-install-btn");
+  const btn2 = document.getElementById("pl-install-btn-2");
+  const doBtn = document.getElementById("pl-install-do");
+  const closeBtn = document.getElementById("pl-install-close");
+  if (btn1) btn1.onclick = triggerInstall;
+  if (btn2) btn2.onclick = triggerInstall;
+  if (doBtn) doBtn.onclick = async () => {
+    if (_deferredInstallPrompt) {
+      try {
+        _deferredInstallPrompt.prompt();
+        const { outcome } = await _deferredInstallPrompt.userChoice;
+        _deferredInstallPrompt = null;
+        if (outcome === "accepted") { setInstallVisible(false); closeInstallModal(); }
+      } catch (err) { console.error("[PL] install prompt failed:", err); }
+    }
+  };
+  if (closeBtn) closeBtn.onclick = closeInstallModal;
+  // Click backdrop to close
+  const modal = document.getElementById("pl-install-modal");
+  if (modal) modal.addEventListener("click", e => { if (e.target === modal) closeInstallModal(); });
+
+  // Surface the install card on the Reminders tab too
+  const card = document.getElementById("pl-install-card");
+  const hint = document.getElementById("pl-install-hint");
+  if (card) card.style.display = "block";
+  if (hint) {
+    if (isIOS()) hint.textContent = "On iOS: tap Share, then 'Add to Home Screen'.";
+    else hint.textContent = `Quick install on ${platformLabel()} — taps below show the steps.`;
+  }
+}
+
 // ===== ONLINE/OFFLINE BANNER =====
 function updateNetworkBanner() {
   let bar = document.getElementById("pl-net-banner");
@@ -1518,7 +1718,7 @@ function dismissSplash() {
     initRegionSelector, initFestivalMode, initMealRemindersUI, wireKitchenBulkBar,
     renderFestivalBanner, renderToday, renderKitchen,
     renderReminders, renderMealsTab, activateTabFromQuery,
-    updateNetworkBanner,
+    updateNetworkBanner, initInstallUI,
   ];
   steps.forEach(fn => {
     try { typeof fn === "function" && fn(); }
