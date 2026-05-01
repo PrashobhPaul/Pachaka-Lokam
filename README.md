@@ -2,7 +2,45 @@
 
 **From grocery to meal, simplified.**
 
-Pachaka Lokam (Malayalam: "Kitchen World") is a kitchen management Progressive Web App designed for South Indian households. It connects what's in your kitchen to what you can cook — tracking groceries, suggesting meals based on available ingredients, managing maid/milk/newspaper attendance, and handling festival meal overrides for Kerala, Tamil Nadu, Andhra Pradesh, and Telangana.
+<p align="center">
+  <img src="assets/logo.png" alt="Pachaka Lokam" width="120" />
+</p>
+
+<p align="center">
+  <a href="https://pachakalokam.prashobhpaul.com">
+    <img src="https://img.shields.io/badge/🌐_Open_Web_App-1fa34a?style=for-the-badge&labelColor=137a35" alt="Open Web App" />
+  </a>
+  <a href="https://pachakalokam.prashobhpaul.com">
+    <img src="https://img.shields.io/badge/📲_Install_PWA-1fa34a?style=for-the-badge&labelColor=137a35" alt="Install PWA" />
+  </a>
+  <a href="https://github.com/PrashobhPaul/Pachaka-Lokam/releases/latest/download/pachaka-lokam.apk">
+    <img src="https://img.shields.io/badge/⬇_Download_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white&labelColor=2a9963" alt="Download APK" />
+  </a>
+  <a href="https://github.com/PrashobhPaul/Pachaka-Lokam/releases/latest">
+    <img src="https://img.shields.io/github/v/release/PrashobhPaul/Pachaka-Lokam?style=for-the-badge&label=latest&color=ff6600" alt="Latest Release" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/PrashobhPaul/Pachaka-Lokam/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License" />
+  </a>
+  <img src="https://img.shields.io/badge/PWA-installable-5a0fc8?style=flat-square&logo=pwa&logoColor=white" alt="PWA" />
+  <img src="https://img.shields.io/badge/offline-first-success?style=flat-square" alt="Offline-first" />
+  <img src="https://img.shields.io/badge/Android-5.0%2B-brightgreen?style=flat-square&logo=android&logoColor=white" alt="Android 5.0+" />
+</p>
+
+## 📥 Install
+
+| Platform | How |
+|---|---|
+| **Android (PWA)** | Open [pachakalokam.prashobhpaul.com](https://pachakalokam.prashobhpaul.com) in Chrome → tap the **⬇ Install** button in the app header (or the menu → "Install app") |
+| **Android (APK sideload)** | [Download latest APK](https://github.com/PrashobhPaul/Pachaka-Lokam/releases/latest/download/pachaka-lokam.apk) → enable "Install unknown apps" for your browser → tap to install. Works on any Android 5.0+ device. |
+| **iOS / iPadOS** | Open [pachakalokam.prashobhpaul.com](https://pachakalokam.prashobhpaul.com) in Safari → tap **Share** → **Add to Home Screen** |
+| **Desktop (Chrome / Edge)** | Open [pachakalokam.prashobhpaul.com](https://pachakalokam.prashobhpaul.com) → click the install icon in the address bar |
+| **Play Store** | _Coming soon — see [`PLAY_STORE_CHECKLIST.md`](PLAY_STORE_CHECKLIST.md)_ |
+
+> The app works **fully offline** once installed. Your data lives only on your device — no accounts, no cloud, no tracking.
 
 ---
 
