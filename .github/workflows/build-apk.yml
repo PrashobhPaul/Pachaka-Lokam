@@ -1,0 +1,177 @@
+# =============================================================================
+# Pachaka Lokam — Build & Release APK
+# =============================================================================
+# Triggers:
+#   - Push of a tag matching v*.*.* (e.g. v1.0.0) → builds + publishes Release
+#   - Manual dispatch from Actions tab → builds, attaches as workflow artifact
+#
+# Prerequisites — these 4 repo Secrets must be set (one-time, via the
+# 'Init keystore' workflow + manual paste into Settings → Secrets):
+#   ANDROID_KEYSTORE_BASE64
+#   KEYSTORE_PASSWORD
+#   KEY_PASSWORD
+#   KEY_ALIAS
+#
+# The build runs Bubblewrap to produce a TWA-style APK that points at
+# pachakalokam.prashobhpaul.com. Output is named pachaka-lokam.apk so the
+# README badge URL resolves correctly.
+# =============================================================================
+
+name: Build and Release APK
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write   # to publish a Release on tag push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify required secrets are present
+        run: |
+          missing=()
+          [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] && missing+=("ANDROID_KEYSTORE_BASE64")
+          [ -z "${{ secrets.KEYSTORE_PASSWORD }}" ]       && missing+=("KEYSTORE_PASSWORD")
+          [ -z "${{ secrets.KEY_PASSWORD }}" ]            && missing+=("KEY_PASSWORD")
+          [ -z "${{ secrets.KEY_ALIAS }}" ]               && missing+=("KEY_ALIAS")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing repo secrets: ${missing[*]}"
+            echo "::error::Run 'Init keystore (one-time)' workflow first, then add the 4 secrets it gives you."
+            exit 1
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Bubblewrap CLI
+        run: npm install -g @bubblewrap/cli@1.24.1
+
+      - name: Decode keystore from secret
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android.keystore
+          if [ ! -s android.keystore ]; then
+            echo "::error::Decoded keystore is empty. ANDROID_KEYSTORE_BASE64 secret is malformed."
+            exit 1
+          fi
+          # Sanity check — keytool must be able to list it with the password.
+          keytool -list -keystore android.keystore -alias "${{ secrets.KEY_ALIAS }}" \
+            -storepass "${{ secrets.KEYSTORE_PASSWORD }}" >/dev/null 2>&1 \
+            || { echo "::error::Keystore + password combination is invalid"; exit 1; }
+          echo "Keystore verified."
+
+      - name: Inject version (tag-based)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          # versionCode = days since 2026-01-01 — strictly monotonic per day,
+          # avoids manual bookkeeping. versionName follows the tag.
+          VCODE=$(( ( $(date +%s) - $(date -d '2026-01-01' +%s) ) / 86400 ))
+          TAG="$TAG" VCODE="$VCODE" node -e "
+            const fs = require('fs');
+            const m = JSON.parse(fs.readFileSync('twa-manifest.json'));
+            m.appVersionName = process.env.TAG;
+            m.appVersionCode = parseInt(process.env.VCODE, 10);
+            fs.writeFileSync('twa-manifest.json', JSON.stringify(m, null, 2));
+            console.log('Set version:', m.appVersionName, '(code', m.appVersionCode + ')');
+          "
+
+      - name: Inject version (manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          VCODE=$(( ( $(date +%s) - $(date -d '2026-01-01' +%s) ) / 86400 ))
+          VNAME="${{ inputs.version_name }}" VCODE="$VCODE" node -e "
+            const fs = require('fs');
+            const m = JSON.parse(fs.readFileSync('twa-manifest.json'));
+            m.appVersionName = process.env.VNAME;
+            m.appVersionCode = parseInt(process.env.VCODE, 10);
+            fs.writeFileSync('twa-manifest.json', JSON.stringify(m, null, 2));
+            console.log('Set version:', m.appVersionName, '(code', m.appVersionCode + ')');
+          "
+
+      - name: Generate Android project from twa-manifest.json
+        run: |
+          # Bubblewrap's `init` may prompt for confirmation of various fields.
+          # Pipe blank lines (= accept defaults from existing twa-manifest.json)
+          # so it runs unattended.
+          WEB_MANIFEST=$(node -e "console.log(require('./twa-manifest.json').webManifestUrl)")
+          echo "Web manifest URL: $WEB_MANIFEST"
+          yes "" | bubblewrap init --manifest="$WEB_MANIFEST" --skipPwaValidation \
+            > init.log 2>&1 || true
+          if [ ! -f "build.gradle" ] && [ ! -d "app" ]; then
+            echo "::error::Bubblewrap init did not produce an Android project. Log:"
+            cat init.log
+            exit 1
+          fi
+          echo "Android project generated."
+
+      - name: Build signed APK
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
+          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          # `--skipPwaValidation` skips a network check that occasionally
+          # flakes on CI. The signing key path is read from twa-manifest.json
+          # (./android.keystore by default).
+          bubblewrap build --skipPwaValidation
+
+      - name: Stage release asset
+        run: |
+          mkdir -p dist
+          # Bubblewrap's output filename varies across versions — try the
+          # common locations.
+          for path in \
+            "app-release-signed.apk" \
+            "app/build/outputs/apk/release/app-release.apk" \
+            "app/build/outputs/apk/release/app-release-signed.apk"; do
+            if [ -f "$path" ]; then
+              cp "$path" dist/pachaka-lokam.apk
+              echo "Found APK at: $path"
+              break
+            fi
+          done
+          if [ ! -f "dist/pachaka-lokam.apk" ]; then
+            echo "::error::Built APK not found at known paths."
+            find . -name "*.apk" 2>/dev/null | head -20
+            exit 1
+          fi
+          echo "APK size: $(du -h dist/pachaka-lokam.apk | awk '{print $1}')"
+
+      - name: Upload APK as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pachaka-lokam-apk
+          path: dist/pachaka-lokam.apk
+          retention-days: 90
+
+      - name: Attach APK to GitHub Release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/pachaka-lokam.apk
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
