@@ -28,83 +28,130 @@
   <img src="https://img.shields.io/badge/PWA-installable-5a0fc8?style=flat-square&logo=pwa&logoColor=white" alt="PWA" />
   <img src="https://img.shields.io/badge/offline-first-success?style=flat-square" alt="Offline-first" />
   <img src="https://img.shields.io/badge/Android-5.0%2B-brightgreen?style=flat-square&logo=android&logoColor=white" alt="Android 5.0+" />
+  <img src="https://img.shields.io/badge/no_accounts-100%25-success?style=flat-square" alt="No accounts" />
 </p>
+
+A 100% offline kitchen and meal planning companion for South Indian households — covering **Kerala, Tamil Nadu, Andhra Pradesh, Telangana, and Karnataka**. Suggests today's meals from what's actually in your kitchen, knows your festival menus, and tracks daily household services. No accounts, no cloud, no tracking.
+
+---
 
 ## 📥 Install
 
-| Platform | How |
+### Android (recommended)
+
+| Method | How |
 |---|---|
-| **Android (PWA)** | Open [pachakalokam.prashobhpaul.com](https://pachakalokam.prashobhpaul.com) in Chrome → tap the **⬇ Install** button in the app header (or the menu → "Install app") |
-| **Android (APK sideload)** | [Download latest APK](https://github.com/PrashobhPaul/Pachaka-Lokam/releases/latest/download/pachaka-lokam.apk) → enable "Install unknown apps" for your browser → tap to install. Works on any Android 5.0+ device. |
-| **iOS / iPadOS** | Open [pachakalokam.prashobhpaul.com](https://pachakalokam.prashobhpaul.com) in Safari → tap **Share** → **Add to Home Screen** |
-| **Desktop (Chrome / Edge)** | Open [pachakalokam.prashobhpaul.com](https://pachakalokam.prashobhpaul.com) → click the install icon in the address bar |
-| **Play Store** | _Coming soon — see [`PLAY_STORE_CHECKLIST.md`](PLAY_STORE_CHECKLIST.md)_ |
+| **APK sideload** *(easiest)* | [Download the latest APK](https://github.com/PrashobhPaul/Pachaka-Lokam/releases/latest/download/pachaka-lokam.apk) → tap to install. See [install guide](#-android-install-guide) below if your phone shows a warning. |
+| **PWA from browser** | Open [pachakalokam.prashobhpaul.com](https://pachakalokam.prashobhpaul.com) in Chrome → tap **⬇ Install** in the app header. |
+
+### iOS / iPadOS
+Open [pachakalokam.prashobhpaul.com](https://pachakalokam.prashobhpaul.com) in Safari → tap **Share** → **Add to Home Screen**.
+
+### Desktop
+Chrome / Edge: open the URL → click the install icon in the address bar.
 
 > The app works **fully offline** once installed. Your data lives only on your device — no accounts, no cloud, no tracking.
 
 ---
 
-## Features
+## 📲 Android install guide
 
-### Ingredient-Aware Meal Suggestions
-The meal engine matches your pantry against regional recipes in real time. If you have rice, toor dal, and drumstick, it knows you can make sambar. Meals are suggested with an 80% bias toward simple everyday cooking and 20% toward special dishes. Each curry only checks for 1-2 defining main ingredients — staple spices (chilli, curry leaves, mustard, turmeric, cumin, ginger, garlic, oil) are assumed always available and never checked.
+Sideloading an APK is safe — Android just asks you to confirm because the app isn't from the Play Store.
 
-### Regional Support (4 States)
-- **Kerala** — Sambar, Avial, Thoran, Kaalan, Olan, Erissery, Puttu + Kadala, Appam + Stew, and more
-- **Tamil Nadu** — Sambar, Rasam, Kootu, Poriyal, Pongal, Rava Dosa, Chicken Chettinad
-- **Andhra Pradesh** — Pappu, Vepudu, Gutti Vankaya, Pesarattu, Pulihora, Fish Pulusu
-- **Telangana** — Pappu, Pulusu, Vepudu, Pesarattu + Upma, Natu Kodi Pulusu
+1. **Download the APK** from the link above. Your browser may warn that the file type can be harmful — tap **OK** / **Download anyway**. The APK is signed with a stable key; you can verify the signature in [Releases](https://github.com/PrashobhPaul/Pachaka-Lokam/releases).
+2. **Open the downloaded APK** from your notifications or the Files app.
+3. **First time only:** Android asks "Allow this source to install apps?" → tap **Settings** → toggle **Allow from this source** ON → press back.
+4. Tap **Install**. Play Protect may show a "Not a known app" notice — tap **Install anyway**. Play Protect verifies the app, doesn't block legitimate apps.
+5. Tap **Open** when install completes. You're set.
 
-All breakfast pairings are authentic (idli pairs with sambar/coconut chutney/groundnut chutney, not random curries). Lunch and dinner are strictly rice-based meals — chapati appears only as a rare substitute.
+**Why isn't it on the Play Store?** Because we don't want to add accounts, telemetry, or tracking — and a Play listing comes with paperwork that doesn't fit a free, no-data-collection app. The source code is in this repo. The APK is reproducible.
 
-### Festival Intelligence System
-Seven South Indian festivals with three types of meal plan resolution:
-- **Progressive** — Multi-day plans where each day has distinct meals (Pongal: Bhogi → Thai Pongal → Mattu Pongal → Kaanum Pongal; Sankranti: Bhogi → Sankranti → Kanuma → Mukkanuma)
-- **Pattern** — Template cycling from simple to grand (Onam: 10-day escalation ending in Onasadya; Navaratri: 9-day progression to Vijayadashami; Bathukamma: 9-day Telangana celebration)
-- **Static** — Fixed meals for single-day festivals (Vishu: Kanji + Sadya; Ugadi: Pachadi + Bobbatlu)
-
-When a festival is active, a banner appears with the greeting and today's prescribed meals. Users can choose to override regular suggestions, show festival meals as suggestions only, or turn off festival mode entirely.
-
-### Kitchen & Grocery Management
-- 71 seeded grocery items across 8 categories (Vegetables, Staples & Pulses, Non-Veg, Dairy & Bakery, Oils, Spices, Snacks, Fruits)
-- Update quantities as you use items; mark items as "Out" to move them to the shopping list
-- Monthly reset to start fresh; "Bought" action returns items to the kitchen
-
-### Maid, Milk & Newspaper Tracker
-Monthly calendar view with tap-to-cycle tracking (blank → present → absent → blank) for three services. Six stat cards show monthly counts at a glance: maid present/absent, milk received/missed, newspaper received/missed.
-
-### Gas Cylinder Tracker
-Records when a new gas cylinder was started and shows the running count of days used — helps predict when the next refill is needed.
-
-### Weekly Meal Plan Generator
-Generates 7-day plans respecting pantry availability, beverage preference (tea/coffee/either), and the 80/20 simple-to-special ratio. Shows missing ingredients with an "Approve → Grocery" workflow. Plans can be saved as weekly templates and reapplied.
-
-### Smart Reminders
-Daily/weekly/custom reminders with browser notification support. Seeded with "Buy Milk" (daily) and "Vegetable Shopping" (weekly).
+**How do I update?** Watch this repo (top-right ⭐ → Watch → Releases only) — GitHub will email you when a new APK is published. Sideloaded APKs don't auto-update; download the new one and reinstall (your data stays on the device).
 
 ---
 
-## Architecture
+## ✨ Features
+
+### Smart meal suggestions from your kitchen
+The meal engine matches your pantry against regional recipes in real time. If you have rice, toor dal, and drumstick, it knows you can make sambar. Each curry only checks for 1–2 defining ingredients — staple spices (chilli, curry leaves, mustard, turmeric, cumin, ginger, garlic, oil) are assumed always available. Suggestions are 80% biased toward simple everyday cooking and 20% special.
+
+### Five South Indian regions
+- **Kerala** — Sambar, Avial, Thoran, Kaalan, Olan, Erissery, Puttu + Kadala, Appam + Stew
+- **Tamil Nadu** — Sambar, Rasam, Kootu, Poriyal, Pongal, Rava Dosa, Chettinad
+- **Andhra Pradesh** — Pappu, Vepudu, Gutti Vankaya, Pesarattu, Pulihora, Fish Pulusu
+- **Telangana** — Pappu, Pulusu, Vepudu, Pesarattu + Upma, Natu Kodi Pulusu
+- **Karnataka** — Huli, Saaru, Bisi Bele Bath, Vangi Bath, Akki Roti, Ragi Mudde
+
+Lunch and dinner are strictly rice-based — chapati appears only as a rare substitute.
+
+### ⭐ My Favourites *(new in v2.1)*
+Save your family recipes, your sub-region's variants, or anything else not in the seed catalogue — Mangalore Buns, Malabar Biryani, Mysore Bonda, Amma's Sambar. Custom meals plug straight into the suggestion engine: when their main ingredients are in your kitchen, they show up alongside the regional menu.
+
+Adding a meal lets you also add new ingredients to your kitchen (e.g. "mandi spice mix") so the engine can match them. Custom ingredients survive Reset Month.
+
+### ↗ Share & Import recipes *(new in v2.1)*
+Share a single recipe or your whole weekly plan with one tap. The app encodes the recipe into a URL — paste it into WhatsApp, Telegram, or any messaging app. The recipient opens the link, previews the recipe, and adds it to their favourites with one tap. The URL is just a carrier — **no data goes through any server**.
+
+If a friend sends you a link and the app doesn't auto-open, paste it from **Reminders → Settings → Paste shared link**.
+
+### 💾 Backup & Restore *(new in v2.1)*
+**Reminders → Settings → Backup** creates a single file with everything — favourites, kitchen, plans, trackers, settings. Send it to yourself on WhatsApp, Drive, or email. Optional passphrase encryption (AES-GCM 256). Restore on a new phone with **Merge** (safe, additive) or **Replace** modes.
+
+The app nudges you with a quiet toast if your last backup is over 30 days old. No nag screens.
+
+### 🎉 Festival Intelligence
+Festivals across all five states with three plan-resolution types:
+- **Progressive** — Multi-day plans where each day is distinct (Pongal, Sankranti)
+- **Pattern** — Template cycling from simple to grand (Onam, Navaratri, Bathukamma)
+- **Static** — Fixed meals for single-day festivals (Vishu, Ugadi, Ganesh Chaturthi, Diwali, Christmas)
+
+When a festival is active, a banner appears with the greeting and today's prescribed meals. Choose to override regular suggestions, show festival meals as suggestions only, or turn off festival mode.
+
+### 🍳 Kitchen & Grocery
+71+ seeded grocery items across 8 categories. Update quantities as you use them; mark items as "Out" to move them to the shopping list. Monthly reset to start fresh. "Bought" returns items to the kitchen. Floating bulk-action bar — tick multiple items, restock or grocery-list them in one save.
+
+### 📅 Maid, Milk, Newspaper Tracker
+Monthly calendar with tap-to-cycle tracking (blank → present → absent → blank) for three services. Six stat cards show monthly counts at a glance. Onboarding lets you turn off services you don't use.
+
+### 🔥 Gas Cylinder Tracker
+Records when a new cylinder was started and shows running days used — helps predict refill timing.
+
+### 🍲 Weekly Meal Plan Generator
+Generates 7-day plans respecting pantry, beverage preference, and the 80/20 simple-to-special ratio. Shows missing ingredients with an "Approve → Grocery" workflow. Save and reapply weekly templates. Share the whole plan with one tap.
+
+### 🔔 Smart Reminders
+Daily/weekly/custom reminders with browser notifications. Meal-time alerts. Water reminders with daily glass tracking. Festival notifications.
+
+### 👋 First-run onboarding *(new in v2.1)*
+A 5-step setup, all skippable: region → diet & beverage → festival mode + fasting days (Tue/Fri/Sat veg) → which household services you track → quick-stock 12 staples. Re-runnable anytime from Settings.
+
+---
+
+## 🏗 Architecture
 
 This is a **pure static PWA** — no backend, no framework, no build step.
 
 | Aspect | Detail |
 |---|---|
 | **Runtime** | Vanilla JavaScript (ES2020+) |
-| **State** | localStorage (`pl_state_v5`) |
-| **Offline** | Service worker with cache-first strategy |
+| **State** | localStorage (`pl_state_v7`) |
+| **Offline** | Service worker with cache-first strategy (`pl-v10`) |
 | **Android** | Ready for Capacitor or TWA conversion |
-| **Size** | ~92 KB total (excluding icon) |
+| **Size** | ~110 KB total (excluding icon) |
 
-### File Structure
+### File structure
 
 ```
 pachaka-lokam/
 ├── index.html              # Single-page app shell with 6 tabs
-├── data.js                 # Grocery seed, regional curries, meal rules, festival data
+├── data.js                 # Grocery seed, regional curries, meal rules, festivals
 ├── app.js                  # Store, meal engine, festival service, UI rendering
+├── favourites.js           # Custom meals + custom ingredients (v2.1)
+├── share.js                # Share/import codec + modals (v2.1)
+├── backup.js               # File-based backup/restore + AES-GCM (v2.1)
+├── onboarding.js           # 5-step first-run wizard (v2.1)
 ├── app.css                 # All styles (responsive, mobile-first)
-├── sw.js                   # Service worker (cache v3)
+├── sw.js                   # Service worker (cache pl-v10)
 ├── manifest.webmanifest    # PWA manifest (standalone, portrait)
 ├── assets/
 │   └── logo.png            # App icon (512x512, maskable)
@@ -112,32 +159,38 @@ pachaka-lokam/
 └── README.md               # This file
 ```
 
-### Key Technical Decisions
+### Key technical decisions
 
-**Ingredient matching uses exact token matching**, not substring. `pantry.has("rice")` won't falsely match "rice bran oil". The `has()` function lowercases and does `Set.has()` against the pantry.
+**Ingredient matching uses exact token matching**, not substring. `pantry.has("rice")` won't falsely match "rice bran oil". The `has()` function lowercases and does `Set.has()` against the pantry, with a `STAPLE_INGREDIENTS` allowlist for things like chilli, curry leaves, oil.
 
-**Side dishes are resolved dynamically.** Kerala's `withThoran:true` picks from `THORAN_VEG` based on what's in your kitchen. Tamil Nadu's `withPoriyal:true` picks from `PORIYAL_VEG`. AP/Telangana's `withVepudu:true` picks from `VEPUDU_VEG`. Sambar vegetables, avial vegetables, and kootu vegetables each have their own pools.
+**Side dishes are resolved dynamically.** Kerala's `withThoran:true` picks from `THORAN_VEG` based on what's in your kitchen. Similar pools for Poriyal (TN), Vepudu (AP/TG), Palya (KA), and various Sambar/Avial/Kootu vegetable lists.
 
-**Curries use `minFrom`/`minCount` for flexible matching.** Sambar needs toor dal + at least 2 vegetables from `SAMBAR_VEG`. Avial needs coconut + curd + at least 3 from `AVIAL_VEG`. This produces dynamic descriptions like "Sambar (drumstick, carrot)" based on what's actually available.
+**Curries use `minFrom`/`minCount` for flexible matching.** Sambar needs toor dal + at least 2 vegetables from `SAMBAR_VEG`. Avial needs coconut + curd + at least 3 from `AVIAL_VEG`. Produces dynamic descriptions like "Sambar (drumstick, carrot)".
 
-**Festival resolution is date-driven.** `FestivalService.getActive(region)` checks if today falls within any festival's date range for the selected region, computes the day index, and resolves the meal plan accordingly.
+**Festival resolution is date-driven.** `FestivalService.getActive(region)` checks if today falls within any festival's date range, computes the day index, and resolves the meal plan accordingly.
+
+**Favourites integrate into the same engine.** `getMealRules()` merges the user's favourites into the active region's rule pool — they compete on the same simple/special/priority scoring as built-in rules. No special path, no forced inclusion (unless the user pins one by setting priority 1).
+
+**Share payloads are URL-encoded JSON.** Compact-key format, base64url-encoded with version prefix `v1.`. A single recipe ~300–500 chars; a 7-day plan ~1.2–1.5 KB. UTF-8 safe (Malayalam/Tamil/Telugu/Kannada characters round-trip cleanly).
+
+**Backup files are plain JSON** (or `.plenc` if encrypted with PBKDF2-derived AES-GCM-256). The Web Share API delivers them via the system sheet, falling back to a download anchor.
 
 ---
 
-## UI Tabs
+## 🗂 UI tabs
 
 | Tab | Purpose |
 |---|---|
-| **Today** | Today's meal suggestions (4 slots), festival override controls, gas cylinder widget |
-| **Kitchen** | Pantry inventory grouped by category, quantity adjustments, "Out" to grocery |
-| **Grocery** | Shopping list, tap "Bought" to return to kitchen |
-| **Meal Plan** | 7-day plan generator, template save/load, missing ingredient approval |
-| **Reminders** | Smart reminders + monthly maid/milk/newspaper tracker calendar |
+| **Today** | Today's meal suggestions, festival banner, gas cylinder widget, ⭐ Favourites, + Custom meal |
+| **Kitchen** | Pantry inventory grouped by category, bulk-update bar |
+| **Grocery** | Shopping list, ↗ Share to WhatsApp |
+| **Meal Plan** | 7-day plan generator, template save/load, ↗ Share plan |
+| **Reminders** | Smart reminders, monthly tracker calendar, ⚙️ Settings (Backup, Paste link, Re-run setup) |
 | **Festivals** | All festivals for your region with Live/Upcoming/Past status |
 
 ---
 
-## Running Locally
+## 🛠 Running locally
 
 No build step needed. Just serve the files:
 
@@ -147,15 +200,13 @@ python3 -m http.server 8080
 
 # Node
 npx serve .
-
-# Or simply open index.html in a browser
 ```
 
 Then open `http://localhost:8080` on your phone or desktop.
 
 ---
 
-## Android Conversion
+## 📱 Android conversion
 
 The app is structured for easy Android conversion via two approaches:
 
@@ -170,83 +221,77 @@ npx cap open android
 ```
 
 ### Option B: TWA (Trusted Web Activity)
-Deploy to any static host (GitHub Pages, Netlify, Vercel), then wrap with TWA using [Bubblewrap](https://github.com/nicedayfor/nicedayfor.github.io) or Android Studio's TWA template. Requires HTTPS.
+Deploy to any static host (GitHub Pages, Netlify, Vercel), then wrap with TWA via Bubblewrap. Requires HTTPS. See [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
 ---
 
-## Data Model (localStorage)
+## 📦 Data model (localStorage)
 
 ```javascript
 {
-  version: 5,
-  items: [                    // Kitchen inventory
-    { id, name, category, qty, unit, step, defaultQty, seasonal }
-  ],
-  grocery: ["item_id", ...],  // Items marked "Out"
-  plan: [                     // Weekly meal plan
-    { date, breakfast, lunch, tea, dinner }
-  ],
-  todayMeals: {               // Today's selections
-    date, breakfast, lunch, tea, dinner
-  },
-  reminders: [                // Smart reminders
-    { id, title, frequency, time, active }
-  ],
-  tracker: {                  // Maid/Milk/Newspaper attendance
-    "2026-04": { "15": { maid, milk, newspaper } }
-  },
+  items: [...],                 // Kitchen inventory
+  plans: { ... },               // Weekly meal plans by date key
+  reminders: [...],
+  tracker: { maid, milk, newspaper },
   settings: {
-    region: "Kerala",         // Selected state
-    beverage: "tea",          // Tea/Coffee/Either preference
-    festivalMode: "override", // override | suggest | off
-    newspaper: true           // Newspaper tracking enabled
+    region: "Kerala",
+    beverage: "tea",
+    dietPref: "nonveg",         // veg | egg | nonveg (v2.1)
+    festivalMode: "override",
+    services: { maid, milk, newspaper, gas },  // (v2.1)
+    shareName: ""               // (v2.1)
   },
-  gasCylinder: {              // Gas cylinder tracking
-    startDate: "2026-04-10"
+  vegRestrictions: { days: [], months: [] },
+  gasCylinder: { startDate },
+  template: null,               // Saved weekly template
+  specialDays: [...],
+  favourites: {                 // (v2.1)
+    meals: [...],
+    customIngredients: [...]
   },
-  weeklyTemplate: null        // Saved weekly plan template
+  onboarded: false,             // (v2.1)
+  lastBackupAt: null            // (v2.1)
 }
 ```
 
 ---
 
-## Regional Curry Catalog
+## 🥘 Regional curry catalogue
 
 | Region | Curries | Highlights |
 |---|---|---|
-| **Kerala** | 18 | Sambar, Avial, Thoran (3 variants), Kaalan, Olan, Erissery, Pulissery, Moru Curry, Kootu Curry |
-| **Tamil Nadu** | 12 | Sambar, Rasam, Kootu, Poriyal, Vathal Kuzhambu, Mor Kuzhambu, Sundal, Chicken Chettinad |
+| **Kerala** | 18 | Sambar, Avial, Thoran (3), Kaalan, Olan, Erissery, Pulissery, Moru Curry, Kootu Curry |
+| **Tamil Nadu** | 12 | Sambar, Rasam, Kootu, Poriyal, Vathal Kuzhambu, Mor Kuzhambu, Sundal, Chettinad |
 | **Andhra Pradesh** | 10 | Pappu, Sambar, Rasam, Vepudu, Gutti Vankaya, Tomato Pappu, Fish Pulusu |
 | **Telangana** | 9 | Pappu, Pulusu, Rasam, Vepudu, Gutti Vankaya, Natu Kodi Pulusu |
+| **Karnataka** | 11 | Huli, Saaru, Palya, Gojju, Kootu, Majjige Huli, Ennegayi, Saagu |
+
+Anything missing for your sub-region? Use **+ Custom meal** to add it — it'll be suggested whenever its ingredients are in your kitchen.
 
 ---
 
-## Festival Calendar
+## 🔐 Privacy
 
-| Festival | Region | Duration | Type |
-|---|---|---|---|
-| Sankranti | AP, Telangana | 4 days (Jan 13-16) | Progressive |
-| Pongal | Tamil Nadu | 4 days (Jan 14-17) | Progressive |
-| Ugadi | AP, Telangana | 1 day (Mar 29) | Static |
-| Vishu | Kerala | 2 days (Apr 14-15) | Static |
-| Onam | Kerala | 10 days (Aug 28 - Sep 6) | Pattern |
-| Bathukamma | Telangana | 9 days (Oct 2-10) | Pattern |
-| Navaratri | All 4 states | 9 days (Oct 11-19) | Pattern |
+- Your data lives **only on your device** in `localStorage`. Nothing leaves it.
+- The app makes **no network calls** during normal use — no analytics, no tracking, no ads, no SDKs.
+- The **only** network-touching feature is optional Share/Import: when you tap Share, the app encodes the recipe into a URL — no server is involved, the URL is just text the recipient opens.
+- Backup files are local. Encryption is your choice.
+- See [`privacy-policy.html`](privacy-policy.html) for the full policy.
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
 This is a personal/non-profit project. Contributions welcome for:
 - Adding more regional curries with authentic pairings
-- Expanding to Karnataka and other South Indian regions
-- Improving the festival date calculation (currently hardcoded for 2026)
+- Karnataka coastal (Mangalore/Udupi), Kerala Malabar Muslim cuisine, Tamil Nadu Chettinad/Kongunadu sub-regions
+- Festival date computation for years beyond 2028
 - Better PWA install experience
-- UI/UX improvements for the tracker calendar
+- Screenshots in Malayalam, Tamil, Telugu, Kannada
 
 ---
 
-## License
+## 📜 License
 
 MIT
 

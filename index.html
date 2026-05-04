@@ -183,6 +183,8 @@
             <option value="off">Off</option>
           </select>
         </label>
+        <button class="btn" id="btn-fav-list" title="My favourite meals">⭐ Favourites</button>
+        <button class="btn" id="btn-fav-add" title="Save a custom meal">+ Custom meal</button>
         <button class="btn" id="btn-today-from-template">📋 From Template</button>
         <button class="btn primary" id="btn-today-suggest">✨ Suggest Today</button>
       </div>
@@ -257,7 +259,10 @@
 
   <!-- ===== GROCERY ===== -->
   <section id="grocery" class="panel">
-    <div class="toolbar"><h2>Shopping List</h2></div>
+    <div class="toolbar">
+      <h2>Shopping List</h2>
+      <button class="btn" id="btn-share-grocery" title="Share grocery list">↗ Share</button>
+    </div>
     <p class="hint">Tap <b>Bought</b> to return items to Kitchen.</p>
     <div id="grocery-list"></div>
   </section>
@@ -276,6 +281,7 @@
           <select id="bev-select"><option value="tea">Tea</option><option value="coffee">Coffee</option><option value="either">Either</option></select>
         </label>
         <input type="date" id="plan-start" />
+        <button class="btn" id="btn-share-plan" title="Share this week's plan">↗ Share</button>
         <button class="btn" id="btn-edit-toggle">Edit Plan</button>
         <button class="btn primary" id="btn-generate">Generate 7 days</button>
       </div>
@@ -365,6 +371,17 @@
         <input id="r-time" type="time" />
         <button class="btn primary" id="btn-add-rem">Add</button>
       </div>
+
+      <!-- Settings & data -->
+      <div class="card" style="margin:18px 0 10px;padding:12px">
+        <div class="toolbar"><h3>⚙️ Settings &amp; data</h3></div>
+        <p class="hint">Your data lives only on this device. Back it up so you don't lose it.</p>
+        <div class="add-row" style="flex-wrap:wrap;gap:8px">
+          <button class="btn" id="btn-backup">💾 Backup &amp; Restore</button>
+          <button class="btn" id="btn-share-paste">📥 Paste shared link</button>
+          <button class="btn" id="btn-rerun-onboarding">🔁 Re-run setup</button>
+        </div>
+      </div>
     </div>
 
     <!-- Tracker sub-panel -->
@@ -432,6 +449,10 @@
 </main>
 <footer>Pachaka Lokam · v1.0 · South India edition</footer>
 <script src="data.js"></script>
+<script src="favourites.js"></script>
+<script src="share.js"></script>
+<script src="backup.js"></script>
+<script src="onboarding.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

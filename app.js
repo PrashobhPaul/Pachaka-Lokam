@@ -1,5 +1,5 @@
-/* Pachaka Lokam v2.0 — festivals, regions, special days, veg restrictions, buy-suggestions */
-const STORAGE_KEY = "pl_state_v6";
+/* Pachaka Lokam v2.1 — favourites, share/import, backup, onboarding */
+const STORAGE_KEY = "pl_state_v7";
 const uid = () => Math.random().toString(36).slice(2, 10);
 const cap = s => s[0].toUpperCase() + s.slice(1);
 const isoWeek = d => { const x=new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate()+4-(x.getDay()||7));
@@ -25,7 +25,7 @@ const Store = {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) { try { this.state = JSON.parse(raw); this.migrate(); return; } catch {} }
     // Try migrate from older versions
-    for (const old of ["pl_state_v5","pl_state_v4","pl_state_v3"]) {
+    for (const old of ["pl_state_v6","pl_state_v5","pl_state_v4","pl_state_v3"]) {
       const d = localStorage.getItem(old);
       if (d) { try { this.state = JSON.parse(d); this.migrate(); this.save(); return; } catch {} }
     }
@@ -36,7 +36,9 @@ const Store = {
         unit: u.unit, qty: 0, step: u.step, defaultQty: u.defaultQty, needsBuy: false, seasonal }));
     });
     this.state = { items, plans: {}, reminders: REMINDER_SEED.map(r => ({ id: uid(), ...r })),
-      notifiedDates: {}, settings: { beverage: "tea", region: "Kerala", festivalMode: "override" },
+      notifiedDates: {}, settings: { beverage: "tea", region: "Kerala", festivalMode: "override",
+        dietPref: "nonveg", services: { maid: true, milk: true, newspaper: true, gas: true },
+        shareName: "" },
       template: null, templateDismissedWeek: null,
       tracker: { maid: {}, milk: {}, newspaper: {} },
       gasCylinder: { startDate: null },
@@ -46,6 +48,9 @@ const Store = {
       festivalNotifs: { enabled: true, leadDays: 1, morningTime: "08:00" },
       waterReminder: { ...WATER_REMINDER_DEFAULT },
       waterLog: {}, // { "YYYY-MM-DD": glassesCount }
+      favourites: { meals: [], customIngredients: [] },
+      onboarded: false,
+      lastBackupAt: null,
     };
     this.save();
   },
@@ -67,6 +72,15 @@ const Store = {
     this.state.festivalNotifs ||= { enabled: true, leadDays: 1, morningTime: "08:00" };
     this.state.waterReminder ||= { ...WATER_REMINDER_DEFAULT };
     this.state.waterLog ||= {};
+    // v2.1 additions: favourites, onboarding, services, backup ledger
+    this.state.favourites ||= { meals: [], customIngredients: [] };
+    this.state.favourites.meals ||= [];
+    this.state.favourites.customIngredients ||= [];
+    this.state.settings.dietPref ||= "nonveg";
+    this.state.settings.services ||= { maid: true, milk: true, newspaper: true, gas: true };
+    this.state.settings.shareName ??= "";
+    this.state.onboarded ??= false;
+    this.state.lastBackupAt ??= null;
     // Ensure new grocery items exist
     const existing = new Set(this.state.items.map(i => i.name));
     GROCERY_SEED.forEach(g => {
@@ -85,7 +99,18 @@ const Store = {
 // ===== REGION-AWARE HELPERS =====
 function getRegion() { return Store.state.settings.region || "Kerala"; }
 function getCurries() { return REGION_CURRIES[getRegion()] || KERALA_CURRIES; }
-function getMealRules() { return REGION_MEAL_RULES[getRegion()] || MEAL_RULES_KERALA; }
+function getMealRules() {
+  const baseRules = REGION_MEAL_RULES[getRegion()] || MEAL_RULES_KERALA;
+  // Merge user favourites into the active rule pool. They compete with
+  // regional rules on the same simple/special/priority scoring — no special
+  // path, no forced inclusion. Implemented in favourites.js.
+  if (typeof Fav === "undefined" || !Fav.list().length) return baseRules;
+  const merged = {};
+  for (const slot of ["breakfast","lunch","tea","dinner"]) {
+    merged[slot] = (baseRules[slot] || []).concat(Fav.asRulesForSlot(slot));
+  }
+  return merged;
+}
 
 // ===== VEG RESTRICTION CHECK =====
 function isVegOnly(dateStr) {
@@ -619,6 +644,14 @@ function resolvePalya(p) {
 
 function tryCook(meal, p, strict = true, vegOnly = false) {
   if (vegOnly && meal.nonVeg) return null;
+  // Global diet preference: "veg" rejects all non-veg; "egg" rejects meat
+  // but allows egg-based meals; "nonveg" (or undefined) is unrestricted.
+  const diet = Store.state?.settings?.dietPref;
+  if (meal.nonVeg && diet === "veg") return null;
+  if (meal.nonVeg && diet === "egg") {
+    const blob = ((meal.base || []).join(" ") + " " + (meal.name || "")).toLowerCase();
+    if (/\b(chicken|fish|prawn|mutton|beef|crab|squid|meat)\b/.test(blob)) return null;
+  }
   const missing = meal.base.filter(b => !has(b, p));
   if (strict && missing.length) return null;
   const ctx = { matched: [], missing: [...missing] };
@@ -1713,12 +1746,24 @@ function dismissSplash() {
     console.error("[PL] Store.load failed, recovering with defaults:", err);
     try { localStorage.removeItem(STORAGE_KEY); Store.load(); } catch {}
   }
+  // Expose for cross-module access (favourites, share, backup, onboarding).
+  window.Store = Store;
+  window.STAPLE_INGREDIENTS = STAPLE_INGREDIENTS;
+  window.uid = uid;
+  window.cap = cap;
+  window.todayKey = todayKey;
+  window.getRegion = getRegion;
   // Each step is independent — failure in one won't stop the others.
   const steps = [
     initRegionSelector, initFestivalMode, initMealRemindersUI, wireKitchenBulkBar,
     renderFestivalBanner, renderToday, renderKitchen,
     renderReminders, renderMealsTab, activateTabFromQuery,
     updateNetworkBanner, initInstallUI,
+    // v2.1 modules — guarded for older bundles where the file may be absent.
+    () => typeof initFavouritesUI === "function" && initFavouritesUI(),
+    () => typeof initShareUI       === "function" && initShareUI(),
+    () => typeof initBackupUI      === "function" && initBackupUI(),
+    () => typeof initOnboarding    === "function" && initOnboarding(),
   ];
   steps.forEach(fn => {
     try { typeof fn === "function" && fn(); }
