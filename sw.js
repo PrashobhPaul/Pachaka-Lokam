@@ -6,7 +6,7 @@
 //   - Cross-origin: network with cache fallback (no failures bubble up)
 // Bump CACHE_VERSION whenever shell files change.
 
-const CACHE_VERSION = "pl-v11";
+const CACHE_VERSION = "pl-v12";
 const PRECACHE = `${CACHE_VERSION}-precache`;
 const RUNTIME  = `${CACHE_VERSION}-runtime`;
 

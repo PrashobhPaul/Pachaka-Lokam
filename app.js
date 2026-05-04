@@ -1497,163 +1497,24 @@ if (PL_NATIVE) {
   });
 }
 
-// ===== PWA INSTALL PROMPT =====
-// The install button is ALWAYS visible (until installed). When clicked:
-//  - If Chrome captured `beforeinstallprompt` → show native prompt instantly
-//  - Otherwise → show a guided modal with platform-specific steps
-let _deferredInstallPrompt = null;
-
+// ===== STANDALONE / INSTALLED-MODE DETECTION =====
+// The app no longer ships any in-app install UI — install discovery flows
+// through shared messages instead (see share.js, which appends the homepage
+// URL to outgoing share text). We keep this helper because other modules
+// (notably the network banner) need to know whether the app is running in
+// a standalone window vs a regular browser tab.
 function isStandalone() {
   return window.matchMedia("(display-mode: standalone)").matches
     || window.navigator.standalone === true
-    || document.referrer.startsWith("android-app://");
-}
-function plUA() { return navigator.userAgent || ""; }
-function isIOS() { return /iPhone|iPad|iPod/i.test(plUA()) && !window.MSStream; }
-function isAndroid() { return /Android/i.test(plUA()); }
-function isChrome() { return /Chrome|CriOS/i.test(plUA()) && !/Edg|OPR|SamsungBrowser/i.test(plUA()); }
-function isSamsung() { return /SamsungBrowser/i.test(plUA()); }
-function isFirefox() { return /Firefox|FxiOS/i.test(plUA()); }
-function isEdge() { return /Edg/i.test(plUA()); }
-
-function platformLabel() {
-  if (isIOS()) return "iOS Safari";
-  if (isAndroid() && isChrome()) return "Chrome on Android";
-  if (isAndroid() && isSamsung()) return "Samsung Internet";
-  if (isAndroid() && isFirefox()) return "Firefox on Android";
-  if (isAndroid()) return "Android";
-  if (isChrome()) return "Chrome (desktop)";
-  if (isEdge()) return "Edge (desktop)";
-  return "your browser";
+    || document.referrer.startsWith("android-app://")
+    || !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 }
 
-function setInstallVisible(show) {
-  // The Reminders-tab install card and secondary install button were removed
-  // in v2.1 — only the single small hero button remains.
-  const btn1 = document.getElementById("pl-install-btn");
-  if (btn1) btn1.classList.toggle("hide", !show);
-}
-
-function buildInstallSteps() {
-  const stepsEl = document.getElementById("pl-install-steps");
-  const introEl = document.getElementById("pl-install-intro");
-  const doBtn   = document.getElementById("pl-install-do");
-  if (!stepsEl) return;
-  let html = "", showDoBtn = false;
-
-  if (_deferredInstallPrompt) {
-    introEl && (introEl.textContent = "Tap the green button below — we'll handle the rest.");
-    html = "";
-    showDoBtn = true;
-  } else if (isIOS()) {
-    introEl && (introEl.textContent = "On iOS, install via the Share menu (Apple's rules).");
-    html = `<ol>
-      <li>Tap the <b>Share</b> icon <span style="font-size:18px">⬆️</span> at the bottom of Safari.</li>
-      <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
-      <li>Tap <b>Add</b> in the top-right.</li>
-    </ol>`;
-  } else if (isAndroid() && isChrome()) {
-    introEl && (introEl.textContent = "Chrome should show an Install option in its menu.");
-    html = `<ol>
-      <li>Tap the <b>⋮ menu</b> (top-right of Chrome).</li>
-      <li>Tap <b>Install app</b> or <b>Add to Home screen</b>.</li>
-      <li>Tap <b>Install</b> to confirm.</li>
-    </ol>
-    <p class="pl-mini">If you don't see "Install app", reload the page once — Chrome sometimes needs a second visit to register the app.</p>`;
-  } else if (isAndroid() && isSamsung()) {
-    introEl && (introEl.textContent = "Samsung Internet supports installing this app.");
-    html = `<ol>
-      <li>Tap the <b>menu</b> (☰ at the bottom).</li>
-      <li>Tap <b>Add page to</b> → <b>Home screen</b>.</li>
-    </ol>`;
-  } else if (isAndroid() && isFirefox()) {
-    introEl && (introEl.textContent = "Firefox can install this app on Android.");
-    html = `<ol>
-      <li>Tap the <b>⋮ menu</b>.</li>
-      <li>Tap <b>Install</b> or <b>Add to Home screen</b>.</li>
-    </ol>`;
-  } else {
-    introEl && (introEl.textContent = "Use the install icon in your browser's address bar.");
-    html = `<ol>
-      <li>Look for an <b>install icon</b> in the address bar (usually right side).</li>
-      <li>Click it and confirm <b>Install</b>.</li>
-    </ol>
-    <p class="pl-mini">Or: browser menu → "Install Pachaka Lokam" / "Apps" → "Install this site as an app".</p>`;
-  }
-  stepsEl.innerHTML = html;
-  if (doBtn) doBtn.style.display = showDoBtn ? "inline-flex" : "none";
-}
-
-async function triggerInstall() {
-  // Already installed?
-  if (isStandalone()) {
-    alert("Pachaka Lokam is already installed on this device. Open it from your home screen.");
-    return;
-  }
-  // Native prompt available — fire it directly
-  if (_deferredInstallPrompt) {
-    try {
-      _deferredInstallPrompt.prompt();
-      const { outcome } = await _deferredInstallPrompt.userChoice;
-      _deferredInstallPrompt = null;
-      if (outcome === "accepted") setInstallVisible(false);
-      else openInstallModal(); // user dismissed → show manual steps
-      return;
-    } catch (err) { console.warn("[PL] native install failed, falling back:", err); }
-  }
-  openInstallModal();
-}
-
-function openInstallModal() {
-  buildInstallSteps();
-  const m = document.getElementById("pl-install-modal");
-  if (m) m.classList.add("show");
-}
-function closeInstallModal() {
-  const m = document.getElementById("pl-install-modal");
-  if (m) m.classList.remove("show");
-}
-
-window.addEventListener("beforeinstallprompt", e => {
-  e.preventDefault();
-  _deferredInstallPrompt = e;
-  if (!isStandalone()) setInstallVisible(true);
-  console.log("[PL] beforeinstallprompt captured — quick-install ready");
-});
-window.addEventListener("appinstalled", () => {
-  _deferredInstallPrompt = null;
-  setInstallVisible(false);
-  closeInstallModal();
-  console.log("[PL] App installed");
-});
-
-function initInstallUI() {
-  // If already installed → hide everything (CSS .pl-installed already does
-  // this, but call setInstallVisible(false) so legacy refs are kept consistent).
-  if (isStandalone()) { setInstallVisible(false); return; }
-
-  // Show the small install button on web. No nag banner, no auto-popup.
-  setInstallVisible(true);
-
-  const btn1 = document.getElementById("pl-install-btn");
-  const doBtn = document.getElementById("pl-install-do");
-  const closeBtn = document.getElementById("pl-install-close");
-  if (btn1) btn1.onclick = triggerInstall;
-  if (doBtn) doBtn.onclick = async () => {
-    if (_deferredInstallPrompt) {
-      try {
-        _deferredInstallPrompt.prompt();
-        const { outcome } = await _deferredInstallPrompt.userChoice;
-        _deferredInstallPrompt = null;
-        if (outcome === "accepted") { setInstallVisible(false); closeInstallModal(); }
-      } catch (err) { console.error("[PL] install prompt failed:", err); }
-    }
-  };
-  if (closeBtn) closeBtn.onclick = closeInstallModal;
-  // Click backdrop to close.
-  const modal = document.getElementById("pl-install-modal");
-  if (modal) modal.addEventListener("click", e => { if (e.target === modal) closeInstallModal(); });
-}
+// Suppress Chrome's automatic install banner without showing our own UI.
+// Without this preventDefault, Chrome on Android will show a "mini-infobar"
+// or banner inside the address bar suggesting install — we don't want that
+// either. Users discover the app through shared links, not nags.
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); });
 
 // ===== ONLINE/OFFLINE BANNER =====
 function updateNetworkBanner() {
@@ -1751,7 +1612,7 @@ function dismissSplash() {
     initRegionSelector, initFestivalMode, initMealRemindersUI, wireKitchenBulkBar,
     renderFestivalBanner, renderToday, renderKitchen,
     renderReminders, renderMealsTab, activateTabFromQuery,
-    updateNetworkBanner, initInstallUI,
+    updateNetworkBanner,
     // v2.1 modules — guarded for older bundles where the file may be absent.
     () => typeof initFavouritesUI === "function" && initFavouritesUI(),
     () => typeof initShareUI       === "function" && initShareUI(),

@@ -76,42 +76,9 @@
     #pl-splash .pl-logo-wrap{animation:pl-rise .3s ease both}
   }
 
-  /* ===== Install prompts (browser only — fully hidden when app is installed) ===== */
-  .pl-install-btn{display:inline-flex;align-items:center;gap:6px;background:#1fa34a;color:#fff;border:0;
-    padding:7px 12px;border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;
-    box-shadow:0 1px 3px rgba(0,0,0,.12)}
-  .pl-install-btn:active{transform:translateY(1px)}
-  .pl-install-btn.hide{display:none!important}
-  /* Install modal — kept simple, only shown on explicit user tap */
-  #pl-install-modal{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.55);
-    align-items:center;justify-content:center;padding:18px}
-  #pl-install-modal.show{display:flex}
-  #pl-install-modal .pl-card{background:#fffdf7;border-radius:16px;max-width:420px;width:100%;
-    padding:22px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
-  #pl-install-modal h3{margin:0 0 4px;color:#1fa34a;font-size:20px}
-  #pl-install-modal p{margin:6px 0;color:#444;font-size:14px;line-height:1.5}
-  #pl-install-modal ol{margin:8px 0 12px 18px;padding:0;color:#333;font-size:14px;line-height:1.65}
-  #pl-install-modal .pl-row{display:flex;gap:10px;margin-top:14px}
-  #pl-install-modal button{flex:1;padding:10px 14px;border-radius:9px;border:0;font-weight:600;
-    font-size:14px;cursor:pointer}
-  #pl-install-modal .pl-primary{background:#1fa34a;color:#fff}
-  #pl-install-modal .pl-secondary{background:#eee;color:#333}
-  #pl-install-modal .pl-mini{font-size:12px;color:#888;margin-top:8px}
-
-  /* ===== Standalone / installed-app mode =====
-     When running as an installed PWA / TWA / Capacitor APK, hide all install
-     affordances. The early-bootstrap script below adds .pl-installed to <html>
-     before paint to avoid any flash of nags. */
-  html.pl-installed .pl-install-btn,
-  html.pl-installed #pl-install-modal,
-  html.pl-installed #pl-net-banner {
-    display: none !important;
-  }
-  /* Belt-and-braces fallback for browsers that paint before the inline
-     detection script runs (rare, but possible on slow devices). */
+  /* ===== Network banner (browser-only, suppressed in installed app) ===== */
+  html.pl-installed #pl-net-banner { display: none !important; }
   @media all and (display-mode: standalone) {
-    .pl-install-btn,
-    #pl-install-modal,
     #pl-net-banner { display: none !important; }
   }
 
@@ -120,8 +87,8 @@
 </style>
 <script>
   /* Detect installed mode as early as possible — before the body paints —
-     so install nags never flash. Covers PWA standalone, iOS Add-to-Home,
-     Android TWA, and Capacitor APK. */
+     so the network banner stays suppressed. Covers PWA standalone, iOS
+     Add-to-Home, Android TWA, and Capacitor APK. */
   (function(){
     try{
       var standalone =
@@ -145,19 +112,6 @@
   <div class="pl-dots" aria-hidden="true"><i></i><i></i><i></i></div>
 </div>
 
-<!-- Install instructions modal — only shown on explicit tap of the small Install button -->
-<div id="pl-install-modal" role="dialog" aria-modal="true" aria-labelledby="pl-install-title">
-  <div class="pl-card">
-    <h3 id="pl-install-title">📲 Install Pachaka Lokam</h3>
-    <p id="pl-install-intro">Add the app to your home screen — works fully offline once installed.</p>
-    <div id="pl-install-steps"></div>
-    <div class="pl-row">
-      <button class="pl-primary" id="pl-install-do">Install now</button>
-      <button class="pl-secondary" id="pl-install-close">Close</button>
-    </div>
-    <p class="pl-mini" id="pl-install-mini">No tracking · works offline · ~110 KB</p>
-  </div>
-</div>
 <header class="hero">
   <img src="assets/logo.png" class="logo" />
   <div>
@@ -165,7 +119,6 @@
     <p class="tag">From grocery to meal, simplified.</p>
   </div>
   <div class="hero-controls">
-    <button id="pl-install-btn" class="pl-install-btn" title="Install app">⬇ Install</button>
     <select id="region-select" class="region-sel" title="Select your region">
       <option value="Kerala">Kerala</option>
       <option value="Tamil Nadu">Tamil Nadu</option>

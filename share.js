@@ -100,6 +100,14 @@ function buildPlanShareUrl(weekStart, region, days, fromName) {
   return SHARE_BASE + "?import=" + encodePayload(payload);
 }
 
+// Footer line appended to every shared message. Doubles as the discovery
+// path for recipients who don't yet have the app — the homepage is both the
+// PWA and the link to the APK download (per the README install guide). Kept
+// brief so it doesn't read as marketing.
+const SHARE_FOOTER_TEXT = "— Pachaka Lokam · 100% offline kitchen & meal planner";
+const SHARE_HOME_URL    = "https://pachakalokam.prashobhpaul.com";
+const SHARE_GET_APP     = "Get the app: " + SHARE_HOME_URL;
+
 // ---------- Render plan as plain text (the message body) ----------
 function renderPlanAsText(weekStart, region, days, fromName) {
   const lines = [];
@@ -116,6 +124,9 @@ function renderPlanAsText(weekStart, region, days, fromName) {
     if (d.tea)       lines.push(`  ☕ ${d.tea}`);
     if (d.dinner)    lines.push(`  🌙 ${d.dinner}`);
   });
+  lines.push("");
+  lines.push("📲 Tap the link below to import this plan into the app.");
+  lines.push("Don't have it yet? The same link installs the free app.");
   return lines.join("\n");
 }
 
@@ -127,7 +138,10 @@ function renderFavouriteAsText(fav, fromName) {
   if (fav.base?.length) lines.push(`ingredients: ${fav.base.join(", ")}`);
   if (fav.notes) { lines.push(""); lines.push(fav.notes); }
   lines.push("");
-  lines.push("— shared via Pachaka Lokam");
+  lines.push("📲 Tap the link below to add this to your favourites.");
+  lines.push("Don't have the app? The same link installs it.");
+  lines.push("");
+  lines.push(SHARE_FOOTER_TEXT);
   return lines.join("\n");
 }
 
@@ -194,6 +208,10 @@ async function shareGroceryList() {
     list.forEach(i => lines.push(`  • ${i.name}${i.defaultQty ? ` — ${i.defaultQty}${i.unit || ""}` : ""}`));
     lines.push("");
   });
+  // Grocery has no import token (it's a personal pantry list, not portable)
+  // — so we put the homepage URL directly in the body for discovery.
+  lines.push(SHARE_FOOTER_TEXT);
+  lines.push(SHARE_GET_APP);
   await shareText("Grocery list", lines.join("\n"), "");
 }
 
