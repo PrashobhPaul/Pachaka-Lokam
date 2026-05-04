@@ -108,8 +108,25 @@ const SHARE_FOOTER_TEXT = "— Pachaka Lokam · 100% offline kitchen & meal plan
 const SHARE_HOME_URL    = "https://pachakalokam.prashobhpaul.com";
 const SHARE_GET_APP     = "Get the app: " + SHARE_HOME_URL;
 
+// Build the dual-URL block that goes at the end of every share message.
+// The install URL is listed first and labelled clearly so recipients who
+// don't have the app can see it at a glance (instead of staring at a long
+// import URL with a base64 token and wondering what it is). Existing users
+// tap the second URL to do the actual import.
+function _shareUrlBlock(importUrl) {
+  const lines = [];
+  lines.push("📥 Get the app — free, offline, no accounts:");
+  lines.push(SHARE_HOME_URL);
+  if (importUrl) {
+    lines.push("");
+    lines.push("📲 Already have Pachaka Lokam? Tap to import:");
+    lines.push(importUrl);
+  }
+  return lines.join("\n");
+}
+
 // ---------- Render plan as plain text (the message body) ----------
-function renderPlanAsText(weekStart, region, days, fromName) {
+function renderPlanAsText(weekStart, region, days, fromName, importUrl) {
   const lines = [];
   lines.push(`🍽️ Pachaka Lokam — ${region} meal plan`);
   if (fromName) lines.push(`from ${fromName}`);
@@ -125,12 +142,11 @@ function renderPlanAsText(weekStart, region, days, fromName) {
     if (d.dinner)    lines.push(`  🌙 ${d.dinner}`);
   });
   lines.push("");
-  lines.push("📲 Tap the link below to import this plan into the app.");
-  lines.push("Don't have it yet? The same link installs the free app.");
+  lines.push(_shareUrlBlock(importUrl));
   return lines.join("\n");
 }
 
-function renderFavouriteAsText(fav, fromName) {
+function renderFavouriteAsText(fav, fromName, importUrl) {
   const lines = [];
   lines.push(`🍽️ Recipe — *${fav.name}*`);
   if (fromName) lines.push(`from ${fromName}`);
@@ -138,10 +154,9 @@ function renderFavouriteAsText(fav, fromName) {
   if (fav.base?.length) lines.push(`ingredients: ${fav.base.join(", ")}`);
   if (fav.notes) { lines.push(""); lines.push(fav.notes); }
   lines.push("");
-  lines.push("📲 Tap the link below to add this to your favourites.");
-  lines.push("Don't have the app? The same link installs it.");
-  lines.push("");
   lines.push(SHARE_FOOTER_TEXT);
+  lines.push("");
+  lines.push(_shareUrlBlock(importUrl));
   return lines.join("\n");
 }
 
@@ -168,9 +183,11 @@ async function shareText(title, text, url) {
 
 async function shareFavourite(fav) {
   const fromName = (Store.state.settings?.shareName || "").trim();
-  const url = buildFavouriteShareUrl(fav, fromName);
-  const text = renderFavouriteAsText(fav, fromName);
-  await shareText(`Recipe: ${fav.name}`, text, url);
+  const importUrl = buildFavouriteShareUrl(fav, fromName);
+  const text = renderFavouriteAsText(fav, fromName, importUrl);
+  // Pass empty url — both install + import URLs are already in the body.
+  // This way both are visible to the recipient, properly labelled.
+  await shareText(`Recipe: ${fav.name}`, text, "");
 }
 
 async function shareCurrentPlan() {
@@ -191,9 +208,10 @@ async function shareCurrentPlan() {
   }));
   const fromName = (Store.state.settings?.shareName || "").trim();
   const region = getRegion();
-  const url  = buildPlanShareUrl(weekStart, region, days, fromName);
-  const text = renderPlanAsText(weekStart, region, days, fromName);
-  await shareText("Meal plan", text, url);
+  const importUrl = buildPlanShareUrl(weekStart, region, days, fromName);
+  const text = renderPlanAsText(weekStart, region, days, fromName, importUrl);
+  // Pass empty url — both install + import URLs are already in the body.
+  await shareText("Meal plan", text, "");
 }
 
 async function shareGroceryList() {
@@ -208,10 +226,11 @@ async function shareGroceryList() {
     list.forEach(i => lines.push(`  • ${i.name}${i.defaultQty ? ` — ${i.defaultQty}${i.unit || ""}` : ""}`));
     lines.push("");
   });
-  // Grocery has no import token (it's a personal pantry list, not portable)
-  // — so we put the homepage URL directly in the body for discovery.
+  // Grocery isn't a portable artefact (no import URL) — just the install URL.
+  // _shareUrlBlock with no importUrl gives just the labelled install link.
   lines.push(SHARE_FOOTER_TEXT);
-  lines.push(SHARE_GET_APP);
+  lines.push("");
+  lines.push(_shareUrlBlock(null));
   await shareText("Grocery list", lines.join("\n"), "");
 }
 
