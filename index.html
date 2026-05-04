@@ -76,15 +76,13 @@
     #pl-splash .pl-logo-wrap{animation:pl-rise .3s ease both}
   }
 
-  /* ===== Install prompts ===== */
+  /* ===== Install prompts (browser only — fully hidden when app is installed) ===== */
   .pl-install-btn{display:inline-flex;align-items:center;gap:6px;background:#1fa34a;color:#fff;border:0;
-    padding:9px 16px;border-radius:9px;font-weight:700;font-size:13px;cursor:pointer;
-    box-shadow:0 3px 10px rgba(31,163,74,.35);animation:pl-glow 2.4s ease-in-out infinite}
+    padding:7px 12px;border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;
+    box-shadow:0 1px 3px rgba(0,0,0,.12)}
   .pl-install-btn:active{transform:translateY(1px)}
   .pl-install-btn.hide{display:none!important}
-  @keyframes pl-glow{0%,100%{box-shadow:0 3px 10px rgba(31,163,74,.35)}
-    50%{box-shadow:0 3px 18px rgba(31,163,74,.65)}}
-  /* Install modal */
+  /* Install modal — kept simple, only shown on explicit user tap */
   #pl-install-modal{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.55);
     align-items:center;justify-content:center;padding:18px}
   #pl-install-modal.show{display:flex}
@@ -99,13 +97,42 @@
   #pl-install-modal .pl-primary{background:#1fa34a;color:#fff}
   #pl-install-modal .pl-secondary{background:#eee;color:#333}
   #pl-install-modal .pl-mini{font-size:12px;color:#888;margin-top:8px}
-  #pl-ios-hint{display:none;position:fixed;left:12px;right:12px;bottom:14px;z-index:200;
-    background:#222;color:#fff;padding:12px 14px;border-radius:12px;font-size:13px;
-    box-shadow:0 8px 24px rgba(0,0,0,.25);line-height:1.45}
-  #pl-ios-hint.show{display:block}
-  #pl-ios-hint button{float:right;background:transparent;color:#fff;border:1px solid #555;
-    padding:2px 8px;border-radius:6px;font-size:12px;cursor:pointer;margin-left:8px}
+
+  /* ===== Standalone / installed-app mode =====
+     When running as an installed PWA / TWA / Capacitor APK, hide all install
+     affordances. The early-bootstrap script below adds .pl-installed to <html>
+     before paint to avoid any flash of nags. */
+  html.pl-installed .pl-install-btn,
+  html.pl-installed #pl-install-modal,
+  html.pl-installed #pl-net-banner {
+    display: none !important;
+  }
+  /* Belt-and-braces fallback for browsers that paint before the inline
+     detection script runs (rare, but possible on slow devices). */
+  @media all and (display-mode: standalone) {
+    .pl-install-btn,
+    #pl-install-modal,
+    #pl-net-banner { display: none !important; }
+  }
+
+  /* Respect device safe-areas (status bar / notch) when in standalone mode */
+  body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
 </style>
+<script>
+  /* Detect installed mode as early as possible — before the body paints —
+     so install nags never flash. Covers PWA standalone, iOS Add-to-Home,
+     Android TWA, and Capacitor APK. */
+  (function(){
+    try{
+      var standalone =
+        (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+        window.navigator.standalone === true ||
+        (document.referrer || '').indexOf('android-app://') === 0 ||
+        !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+      if(standalone) document.documentElement.classList.add('pl-installed');
+    }catch(e){}
+  })();
+</script>
 </head>
 <body>
 <div id="pl-splash" role="status" aria-label="Loading Pachaka Lokam">
@@ -118,14 +145,7 @@
   <div class="pl-dots" aria-hidden="true"><i></i><i></i><i></i></div>
 </div>
 
-<!-- iOS Add-to-Home-Screen hint (Safari has no beforeinstallprompt) -->
-<div id="pl-ios-hint" role="status">
-  <button onclick="document.getElementById('pl-ios-hint').classList.remove('show')">Dismiss</button>
-  <b>Install Pachaka Lokam</b><br>
-  Tap <span style="font-size:16px">⬆️</span> Share, then <b>Add to Home Screen</b>.
-</div>
-
-<!-- Install instructions modal -->
+<!-- Install instructions modal — only shown on explicit tap of the small Install button -->
 <div id="pl-install-modal" role="dialog" aria-modal="true" aria-labelledby="pl-install-title">
   <div class="pl-card">
     <h3 id="pl-install-title">📲 Install Pachaka Lokam</h3>
@@ -135,7 +155,7 @@
       <button class="pl-primary" id="pl-install-do">Install now</button>
       <button class="pl-secondary" id="pl-install-close">Close</button>
     </div>
-    <p class="pl-mini" id="pl-install-mini">No tracking · works offline · ~80 KB</p>
+    <p class="pl-mini" id="pl-install-mini">No tracking · works offline · ~110 KB</p>
   </div>
 </div>
 <header class="hero">
@@ -307,13 +327,6 @@
 
     <!-- Reminders sub-panel -->
     <div id="rem-alerts" class="rem-panel active">
-      <div class="card" id="pl-install-card" style="margin:10px 0;padding:12px;display:none">
-        <div class="toolbar"><h3>📲 Install Pachaka Lokam</h3></div>
-        <p class="hint" id="pl-install-hint">Add to your home screen — works fully offline once installed.</p>
-        <div class="add-row">
-          <button class="btn primary" id="pl-install-btn-2">Install on this device</button>
-        </div>
-      </div>
       <div class="toolbar" style="margin-top:14px"><h2>Smart Reminders</h2><button class="btn" id="btn-enable-notif">Enable Notifications</button></div>
 
       <div class="card" style="margin:10px 0;padding:12px">

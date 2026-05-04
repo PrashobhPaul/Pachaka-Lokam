@@ -1528,12 +1528,10 @@ function platformLabel() {
 }
 
 function setInstallVisible(show) {
+  // The Reminders-tab install card and secondary install button were removed
+  // in v2.1 — only the single small hero button remains.
   const btn1 = document.getElementById("pl-install-btn");
-  const btn2 = document.getElementById("pl-install-btn-2");
-  const card = document.getElementById("pl-install-card");
   if (btn1) btn1.classList.toggle("hide", !show);
-  if (card) card.style.display = show ? "block" : "none";
-  if (btn2) btn2.style.display = show ? "inline-flex" : "none";
 }
 
 function buildInstallSteps() {
@@ -1630,18 +1628,17 @@ window.addEventListener("appinstalled", () => {
 });
 
 function initInstallUI() {
-  // If already installed → hide everything
+  // If already installed → hide everything (CSS .pl-installed already does
+  // this, but call setInstallVisible(false) so legacy refs are kept consistent).
   if (isStandalone()) { setInstallVisible(false); return; }
 
-  // ALWAYS show install affordances on web (don't wait for beforeinstallprompt)
+  // Show the small install button on web. No nag banner, no auto-popup.
   setInstallVisible(true);
 
   const btn1 = document.getElementById("pl-install-btn");
-  const btn2 = document.getElementById("pl-install-btn-2");
   const doBtn = document.getElementById("pl-install-do");
   const closeBtn = document.getElementById("pl-install-close");
   if (btn1) btn1.onclick = triggerInstall;
-  if (btn2) btn2.onclick = triggerInstall;
   if (doBtn) doBtn.onclick = async () => {
     if (_deferredInstallPrompt) {
       try {
@@ -1653,23 +1650,19 @@ function initInstallUI() {
     }
   };
   if (closeBtn) closeBtn.onclick = closeInstallModal;
-  // Click backdrop to close
+  // Click backdrop to close.
   const modal = document.getElementById("pl-install-modal");
   if (modal) modal.addEventListener("click", e => { if (e.target === modal) closeInstallModal(); });
-
-  // Surface the install card on the Reminders tab too
-  const card = document.getElementById("pl-install-card");
-  const hint = document.getElementById("pl-install-hint");
-  if (card) card.style.display = "block";
-  if (hint) {
-    if (isIOS()) hint.textContent = "On iOS: tap Share, then 'Add to Home Screen'.";
-    else hint.textContent = `Quick install on ${platformLabel()} — taps below show the steps.`;
-  }
 }
 
 // ===== ONLINE/OFFLINE BANNER =====
 function updateNetworkBanner() {
+  // The app is offline-first by design — being offline is the normal state,
+  // not an error. We only surface the banner in BROWSER mode (where a user
+  // might be confused if a network call appears to fail), and never when
+  // the app is installed as a PWA / TWA / Capacitor APK.
   let bar = document.getElementById("pl-net-banner");
+  if (isStandalone()) { if (bar) bar.remove(); return; }
   if (!navigator.onLine) {
     if (!bar) {
       bar = document.createElement("div");
