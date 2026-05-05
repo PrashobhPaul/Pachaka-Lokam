@@ -38,7 +38,7 @@ const Store = {
     this.state = { items, plans: {}, reminders: REMINDER_SEED.map(r => ({ id: uid(), ...r })),
       notifiedDates: {}, settings: { beverage: "tea", region: "Kerala", festivalMode: "override",
         dietPref: "nonveg", services: { maid: true, milk: true, newspaper: true, gas: true },
-        shareName: "" },
+        shareName: "", userName: "" },
       template: null, templateDismissedWeek: null,
       tracker: { maid: {}, milk: {}, newspaper: {} },
       gasCylinder: { startDate: null },
@@ -79,6 +79,7 @@ const Store = {
     this.state.settings.dietPref ||= "nonveg";
     this.state.settings.services ||= { maid: true, milk: true, newspaper: true, gas: true };
     this.state.settings.shareName ??= "";
+    this.state.settings.userName ??= "";
     this.state.onboarded ??= false;
     this.state.lastBackupAt ??= null;
     // Ensure new grocery items exist
@@ -180,33 +181,271 @@ function activateTabFromQuery() {
   const params = new URLSearchParams(location.search);
   const target = params.get("tab");
   if (!target) return;
-  const tabBtn = document.querySelector(`.tab[data-tab="${target}"]`);
-  if (tabBtn) tabBtn.click();
+  // No animation on first paint — just instant switch.
+  if (typeof switchToTab === "function") switchToTab(target, "none");
 }
 
-// ===== TAB NAVIGATION =====
+// ===== TAB NAVIGATION (MD3-style with transitions, scroll preservation, swipe) =====
+// The five primary tabs in display order. Festivals is reachable from the
+// Today header (not in bottom nav, per the 5-tab Material guideline).
+const TAB_ORDER = ["today", "kitchen", "grocery", "meals", "reminders"];
+const _scrollMemo = {};   // tab id → last scrollTop (so switching back restores position)
+let _switching = false;   // re-entrancy guard during the 250ms transition
+
+function _renderForTab(name) {
+  const safe = fn => { try { typeof fn === "function" && fn(); }
+    catch (err) { console.error("[PL] tab render failed:", name, err); } };
+  if (name === "today")     safe(renderToday);
+  if (name === "grocery")   safe(renderGrocery);
+  if (name === "kitchen")   safe(renderKitchen);
+  if (name === "meals")     safe(renderMealsTab);
+  if (name === "reminders") { safe(renderReminders); safe(renderTracker); }
+  if (name === "festivals") safe(renderFestivalsPanel);
+  if (name === "settings")  safe(renderSettingsPanel);
+  // Kitchen bulk bar follows the Kitchen tab.
+  const bar = document.getElementById("kitchen-bulk-bar");
+  if (bar) {
+    if (name !== "kitchen") bar.style.display = "none";
+    else { try { refreshKitchenBulkBar(); } catch {} }
+  }
+}
+
+// Light haptic — Android Chrome only; iOS Safari ignores silently.
+function plHaptic(strength = "light") {
+  try {
+    if (!navigator.vibrate) return;
+    if (strength === "light")  navigator.vibrate(10);
+    else if (strength === "medium") navigator.vibrate(18);
+  } catch {}
+}
+
+// Public API: programmatically switch tabs. `direction` controls slide:
+//   "auto" — infer from current vs target index in TAB_ORDER (default)
+//   "left" / "right" — explicit (used by swipe handler)
+//   "none" — no animation (used by ?tab= deep-link on first load)
+function switchToTab(name, direction = "auto") {
+  if (_switching) return;
+  const newPanel = document.getElementById(name);
+  if (!newPanel) return;
+  const currentTab = document.querySelector(".tab.active");
+  const currentName = currentTab?.dataset.tab;
+  if (currentName === name && newPanel.classList.contains("active")) return;
+
+  // Compute slide direction.
+  let dir = direction;
+  if (dir === "auto") {
+    const a = TAB_ORDER.indexOf(currentName);
+    const b = TAB_ORDER.indexOf(name);
+    dir = (a < 0 || b < 0) ? "left" : (b > a ? "left" : "right");
+  }
+
+  const oldPanel = document.querySelector(".panel.active");
+  // Save scroll position of outgoing panel, render incoming.
+  if (oldPanel && currentName) _scrollMemo[currentName] = window.scrollY;
+  _renderForTab(name);
+
+  // Update tab pill highlight (also handles tabs not in TAB_ORDER, like festivals).
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  const tabBtn = document.querySelector(`.tab[data-tab="${name}"]`);
+  if (tabBtn) tabBtn.classList.add("active");
+
+  if (dir === "none") {
+    if (oldPanel) oldPanel.classList.remove("active");
+    newPanel.classList.add("active");
+    requestAnimationFrame(() => window.scrollTo(0, _scrollMemo[name] || 0));
+    return;
+  }
+
+  // Material-style shared axis (X). Outgoing fades+slides out, incoming
+  // fades+slides in from the opposite side. ~250ms total.
+  _switching = true;
+  const outX = dir === "left" ? "-24px" : "24px";
+  const inX  = dir === "left" ? "24px"  : "-24px";
+
+  // Stage incoming panel just off-screen.
+  newPanel.style.transition = "none";
+  newPanel.style.opacity = "0";
+  newPanel.style.transform = `translateX(${inX})`;
+  newPanel.classList.add("active");
+
+  // Force layout, then animate.
+  void newPanel.offsetWidth;
+  if (oldPanel) {
+    oldPanel.style.transition = "opacity .18s ease, transform .25s cubic-bezier(.4,0,.2,1)";
+    oldPanel.style.opacity = "0";
+    oldPanel.style.transform = `translateX(${outX})`;
+  }
+  newPanel.style.transition = "opacity .22s ease .04s, transform .25s cubic-bezier(.4,0,.2,1) .04s";
+  newPanel.style.opacity = "1";
+  newPanel.style.transform = "translateX(0)";
+
+  setTimeout(() => {
+    if (oldPanel) {
+      oldPanel.classList.remove("active");
+      oldPanel.style.transition = oldPanel.style.opacity = oldPanel.style.transform = "";
+    }
+    newPanel.style.transition = newPanel.style.opacity = newPanel.style.transform = "";
+    window.scrollTo(0, _scrollMemo[name] || 0);
+    _switching = false;
+  }, 280);
+}
+window.switchToTab = switchToTab;
+
+// Wire the bottom nav buttons.
 document.querySelectorAll(".tab").forEach(t => {
-  t.onclick = () => {
-    try {
-      document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
-      document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
-      t.classList.add("active");
-      const panel = document.getElementById(t.dataset.tab);
-      if (panel) panel.classList.add("active");
-      const safe = fn => { try { typeof fn === "function" && fn(); } catch (err) { console.error("[PL] tab render failed:", t.dataset.tab, err); } };
-      if (t.dataset.tab === "today") safe(renderToday);
-      if (t.dataset.tab === "grocery") safe(renderGrocery);
-      if (t.dataset.tab === "kitchen") safe(renderKitchen);
-      if (t.dataset.tab === "meals") safe(renderMealsTab);
-      if (t.dataset.tab === "reminders") { safe(renderReminders); safe(renderTracker); }
-      if (t.dataset.tab === "festivals") safe(renderFestivalsPanel);
-      // Bulk action bar is only relevant on the kitchen tab.
-      const bar = document.getElementById("kitchen-bulk-bar");
-      if (bar && t.dataset.tab !== "kitchen") bar.style.display = "none";
-      else if (bar && t.dataset.tab === "kitchen") { try { refreshKitchenBulkBar(); } catch {} }
-    } catch (err) { console.error("[PL] tab switch failed:", err); }
-  };
+  t.onclick = () => { plHaptic("light"); switchToTab(t.dataset.tab); };
 });
+
+// Wire the Today-header "Festivals" button to the (now-hidden-from-nav)
+// festivals panel.
+document.addEventListener("click", e => {
+  const f = e.target.closest("#btn-open-festivals");
+  if (f) { plHaptic("light"); switchToTab("festivals"); return; }
+  const s = e.target.closest("#btn-open-settings");
+  if (s) { plHaptic("light"); switchToTab("settings"); return; }
+});
+
+// ===== HORIZONTAL SWIPE NAVIGATION (across tabs) =====
+// Only triggers on swipes that don't conflict with horizontal scrolling
+// inside the panel (e.g. the tracker calendar would be opt-out via
+// data-no-swipe on its container). Vertical-dominant gestures pass through
+// to scroll. Modal-open state suppresses swipe.
+(function initSwipeNav() {
+  const main = document.getElementById("pl-main") || document.querySelector("main");
+  if (!main) return;
+  let startX = 0, startY = 0, tracking = false, suppressed = false;
+
+  const isModalOpen = () => !!document.querySelector(".pl-modal.show");
+  const isHorizontalScrollable = (el) => {
+    while (el && el !== main) {
+      const cs = el.dataset && el.dataset.noSwipe ? "true" : null;
+      if (cs) return true;
+      const style = getComputedStyle(el);
+      if ((style.overflowX === "auto" || style.overflowX === "scroll")
+          && el.scrollWidth > el.clientWidth) return true;
+      el = el.parentElement;
+    }
+    return false;
+  };
+
+  main.addEventListener("touchstart", (e) => {
+    if (isModalOpen() || _switching) { suppressed = true; return; }
+    if (e.touches.length !== 1) { suppressed = true; return; }
+    suppressed = isHorizontalScrollable(e.target);
+    if (suppressed) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    tracking = true;
+  }, { passive: true });
+
+  main.addEventListener("touchend", (e) => {
+    if (!tracking || suppressed) { tracking = false; suppressed = false; return; }
+    tracking = false;
+    const dx = (e.changedTouches[0].clientX - startX);
+    const dy = Math.abs(e.changedTouches[0].clientY - startY);
+    // Require horizontal travel >= 60px and 1.6× more horizontal than vertical
+    // — the standard "horizontal swipe vs scroll-with-wobble" disambiguation.
+    if (Math.abs(dx) < 60 || Math.abs(dx) < dy * 1.6) return;
+    const cur = document.querySelector(".tab.active")?.dataset.tab;
+    const idx = TAB_ORDER.indexOf(cur);
+    if (idx < 0) return;
+    if (dx < 0 && idx < TAB_ORDER.length - 1) {
+      plHaptic("light"); switchToTab(TAB_ORDER[idx + 1], "left");
+    } else if (dx > 0 && idx > 0) {
+      plHaptic("light"); switchToTab(TAB_ORDER[idx - 1], "right");
+    }
+  }, { passive: true });
+})();
+
+// ===== GREETING =====
+// Time-of-day greeting on the Today tab. Personalised with the user's name
+// if they entered one in Settings (or during onboarding step 1).
+//
+// Boundaries are kept conservative: 5–11 morning, 12–16 afternoon, 17–20
+// evening, 21–4 night. Uses the device's local clock — no timezone math
+// needed because we never look beyond the current device.
+function _greetingForHour(h) {
+  if (h >= 5  && h < 12) return { word: "Good morning",   icon: "🌅" };
+  if (h >= 12 && h < 17) return { word: "Good afternoon", icon: "🌞" };
+  if (h >= 17 && h < 21) return { word: "Good evening",   icon: "🌆" };
+  return                        { word: "Good night",     icon: "🌙" };
+}
+function renderTodayGreeting() {
+  const el = document.getElementById("today-greeting");
+  if (!el) return;
+  const name = (Store.state.settings?.userName || "").trim();
+  const { word, icon } = _greetingForHour(new Date().getHours());
+  // Always show the greeting — the name is appended only if known.
+  el.innerHTML = `<span class="greet-icon">${icon}</span>
+    <span class="greet-text">${escapeHtml(word)}${name ? ", " + escapeHtml(name) : ""}</span>`;
+  el.style.display = "flex";
+}
+
+// ===== SETTINGS PANEL =====
+// Renders the Settings tab. All controls bind to Store.state and persist
+// immediately on change — no Save button, MD3-style.
+function renderSettingsPanel() {
+  const s = Store.state.settings || {};
+
+  const nameEl = document.getElementById("settings-name");
+  const regEl  = document.getElementById("settings-region");
+  const dietEl = document.getElementById("settings-diet");
+  const bevEl  = document.getElementById("settings-beverage");
+
+  if (nameEl) nameEl.value = s.userName || "";
+  if (regEl)  regEl.value  = s.region   || "Kerala";
+  if (dietEl) dietEl.value = s.dietPref || "nonveg";
+  if (bevEl)  bevEl.value  = s.beverage || "tea";
+
+  // Bind once — flag on the panel so we don't double-bind when the tab
+  // is re-rendered.
+  const panel = document.getElementById("settings");
+  if (panel && !panel.dataset.bound) {
+    panel.dataset.bound = "1";
+
+    // Name: persist on blur or Enter (avoid spamming localStorage on each keystroke).
+    if (nameEl) {
+      const persistName = () => {
+        const v = nameEl.value.trim().slice(0, 40);
+        Store.state.settings.userName = v;
+        Store.save();
+        try { renderTodayGreeting(); } catch {}
+      };
+      nameEl.addEventListener("blur", persistName);
+      nameEl.addEventListener("change", persistName);
+      nameEl.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); nameEl.blur(); }
+      });
+    }
+
+    if (regEl) {
+      regEl.addEventListener("change", () => {
+        Store.state.settings.region = regEl.value;
+        Store.save();
+        // Mirror to the app-bar region selector.
+        const heroSel = document.getElementById("region-select");
+        if (heroSel) heroSel.value = regEl.value;
+        plHaptic("light");
+        try { renderToday(); renderFestivalBanner(); } catch {}
+      });
+    }
+    if (dietEl) {
+      dietEl.addEventListener("change", () => {
+        Store.state.settings.dietPref = dietEl.value;
+        Store.save();
+        plHaptic("light");
+      });
+    }
+    if (bevEl) {
+      bevEl.addEventListener("change", () => {
+        Store.state.settings.beverage = bevEl.value;
+        Store.save();
+        plHaptic("light");
+        try { renderToday(); } catch {}
+      });
+    }
+  }
+}
 
 // ===== FESTIVAL BANNER =====
 function renderFestivalBanner() {
@@ -255,6 +494,7 @@ function renderFestivalBanner() {
 // ===== TODAY'S MEAL PLAN =====
 function renderToday() {
   renderFestivalBanner();
+  renderTodayGreeting();
   const key = todayKey();
   const p = pantry();
   const bev = Store.state.settings.beverage;
@@ -598,7 +838,23 @@ function renderGrocery() {
         <span class="unit">${it.unit}</span><button class="btn xs primary">Bought</button>`;
       const buy = el.querySelector("button");
       const qty = el.querySelector(".qty");
-      buy.onclick = () => { it.qty=parseFloat(qty.value)||it.defaultQty; it.needsBuy=false; Store.save(); renderGrocery(); };
+      buy.onclick = () => {
+        plHaptic("medium");
+        it.qty = parseFloat(qty.value) || it.defaultQty;
+        it.needsBuy = false;
+        Store.save();
+        // Brief "checkmark + fade" feedback before the row leaves the list.
+        // Per spec: subtle feedback, fade + slight scale down, optional
+        // checkmark flash. ~280ms total.
+        buy.textContent = "✓";
+        buy.classList.add("buy-ok");
+        el.style.transition = "opacity .25s ease, transform .25s ease";
+        requestAnimationFrame(() => {
+          el.style.opacity = "0";
+          el.style.transform = "scale(.96)";
+        });
+        setTimeout(() => renderGrocery(), 260);
+      };
       box.appendChild(el);
     });
     root.appendChild(div);

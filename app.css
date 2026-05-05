@@ -567,3 +567,473 @@ footer { text-align:center; padding:24px; color:var(--muted); font-size:12px; }
   .onb-tile { padding: 12px 6px; }
   .fav-card-actions .btn { flex: 1; min-width: 0; font-size: 11px; }
 }
+
+/* =============================================================================
+ * Pachaka Lokam — Material Design 3 polish layer (v2.2)
+ * Bottom nav · shared-axis transitions · 48dp targets · gestures · haptics
+ * ============================================================================= */
+
+/* ----- Motion tokens (re-used everywhere for consistency) ------------------ */
+:root {
+  --ease-md3-standard: cubic-bezier(.4, 0, .2, 1);
+  --ease-md3-emphasis: cubic-bezier(.2, 0, 0, 1);
+  --ease-md3-spring:   cubic-bezier(.2, .9, .3, 1.4);
+  --dur-fast:    .15s;
+  --dur-base:    .2s;
+  --dur-medium:  .25s;
+  --tap-target:  48px;     /* MD3 minimum touch target */
+}
+
+/* ----- Bottom navigation (fixed, 64dp, MD3-style) -------------------------- */
+.tabs {
+  position: fixed !important;
+  left: 0; right: 0; bottom: 0; top: auto !important;
+  height: 64px;
+  padding: 0 !important;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  gap: 0 !important;
+  background: #ffffff;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  border-bottom: 0 !important;
+  /* Elevation level 2 — subtle shadow rising from the bottom edge */
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04), 0 -1px 0 rgba(0, 0, 0, 0.03);
+  z-index: 60;
+  overflow: visible !important;
+  /* Safe-area padding for gesture-nav devices (iOS home bar / Android nav pill) */
+  padding-bottom: env(safe-area-inset-bottom) !important;
+  height: calc(64px + env(safe-area-inset-bottom)) !important;
+}
+
+.tab {
+  flex: 1 1 0;
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 4px !important;
+  margin: 0;
+  min-width: 0;
+  min-height: var(--tap-target);
+  background: transparent;
+  border: 0 !important;
+  border-bottom: 0 !important;
+  color: #6b6b6b;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur-base) var(--ease-md3-standard);
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+.tab .tab-icon {
+  font-size: 22px;
+  line-height: 1;
+  transition: transform var(--dur-medium) var(--ease-md3-spring);
+  filter: grayscale(.35);
+}
+.tab .tab-label {
+  font-size: 11px;
+  letter-spacing: .15px;
+  opacity: .7;
+  transition: opacity var(--dur-base) var(--ease-md3-standard);
+}
+.tab.active {
+  color: var(--green);
+  border-bottom: 0 !important;
+}
+.tab.active .tab-icon {
+  transform: translateY(-2px) scale(1.1);
+  filter: grayscale(0);
+}
+.tab.active .tab-label {
+  opacity: 1;
+  font-weight: 600;
+}
+/* Pressed-state ripple-ish feedback */
+.tab:active .tab-icon { transform: scale(.92); }
+/* Hover only on devices that have hover (skip on touch) */
+@media (hover: hover) {
+  .tab:hover { color: var(--green); }
+}
+
+/* Lift main content above the bottom nav */
+main, #pl-main {
+  padding-bottom: calc(80px + env(safe-area-inset-bottom)) !important;
+}
+
+/* ----- Panel transitions (initial state for shared-axis animation) -------- */
+.panel {
+  will-change: transform, opacity;
+}
+
+/* ----- 48dp touch targets across all interactive controls ------------------ */
+.btn {
+  min-height: var(--tap-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* Ensure consistent padding for the new minimum height */
+  padding: 11px 16px !important;
+  /* MD3 motion curve replaces the older transition */
+  transition:
+    transform var(--dur-fast) var(--ease-md3-spring),
+    box-shadow var(--dur-base) var(--ease-md3-standard),
+    background-color var(--dur-base) var(--ease-md3-standard),
+    border-color var(--dur-base) var(--ease-md3-standard) !important;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn.xs {
+  min-height: 36px;       /* xs is for inline list actions, exemption from 48dp */
+}
+/* Spring-back press (MD3 micro-interaction) */
+.btn:active {
+  transform: scale(.96) !important;
+}
+/* "Bought" success state — checkmark flash + colour shift */
+.btn.buy-ok {
+  background: linear-gradient(135deg, #1fa34a 0%, #22c55e 100%) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+  font-size: 18px !important;
+  transform: scale(1.04) !important;
+}
+
+/* Form controls — match button targets */
+input[type="text"],
+input[type="number"],
+input[type="time"],
+input[type="date"],
+input[type="search"],
+input[type="email"],
+input[type="password"],
+select,
+textarea {
+  min-height: var(--tap-target);
+  font-size: 14px;
+  padding: 10px 12px;
+  transition: border-color var(--dur-base) var(--ease-md3-standard),
+              box-shadow var(--dur-base) var(--ease-md3-standard);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--green) !important;
+  box-shadow: 0 0 0 3px rgba(31, 163, 74, 0.12);
+}
+
+/* Checkboxes / radio — MD3 transitions */
+input[type="checkbox"],
+input[type="radio"] {
+  transition: transform var(--dur-fast) var(--ease-md3-spring);
+  accent-color: var(--green);
+}
+input[type="checkbox"]:active,
+input[type="radio"]:active {
+  transform: scale(1.15);
+}
+
+/* ----- Card elevation system (3 levels max) -------------------------------- */
+/* Level 0 = flat background, level 1 = cards, level 2 = bottom nav (above) */
+.card,
+.today-card,
+.fav-card,
+.grocery-cat,
+.kitchen-cat,
+.cal-row,
+.tracker-card {
+  /* Level 1 — soft, single-direction shadow. No stacking. */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+  border: 0 !important;
+  background: #ffffff;
+  border-radius: 14px !important;
+  transition: transform var(--dur-base) var(--ease-md3-standard),
+              box-shadow var(--dur-base) var(--ease-md3-standard);
+}
+/* Slightly lift cards on press for tactile feel */
+.today-card:active,
+.fav-card:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* ----- App bar (top header) — slim, MD3 small style ----------------------- */
+header.hero {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  background: #ffffff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  /* Sticky, not fixed — scrolls naturally with content */
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  /* Respect status bar */
+  padding-top: env(safe-area-inset-top);
+  height: calc(56px + env(safe-area-inset-top));
+}
+header.hero h1 { font-size: 17px !important; margin: 0; }
+header.hero .tag { display: none; }   /* tagline lives on splash, not header */
+header.hero .logo { width: 32px; height: 32px; border-radius: 8px; }
+header.hero .hero-controls { margin-left: auto; }
+header.hero select.region-sel {
+  min-height: 36px;
+  font-size: 13px;
+  padding: 6px 26px 6px 10px;
+  border-radius: 18px;
+  background: #f4f4f5;
+  border: 0;
+}
+
+/* ----- Toolbar (per-tab actions row) — wrap cleanly, breathing room ------ */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+.toolbar h2,
+.toolbar h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.row {
+  gap: 8px !important;
+}
+
+/* ----- Smooth scrolling on the whole app ---------------------------------- */
+html {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;   /* iOS inertia */
+  overscroll-behavior-y: contain;      /* No bounce-overscroll into the chrome */
+}
+body {
+  /* Slight overscroll stretch effect on iOS (visual polish) */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ----- Pull-to-stretch visual (browser-native; no JS) --------------------- */
+@supports (overscroll-behavior: contain) {
+  main, #pl-main {
+    overscroll-behavior-y: contain;
+  }
+}
+
+/* ----- List items — consistent spacing, no jitter ------------------------- */
+.item,
+.fav-card,
+.cal-cell,
+.reminder-item {
+  transition: transform var(--dur-base) var(--ease-md3-standard),
+              opacity var(--dur-base) var(--ease-md3-standard),
+              background-color var(--dur-fast) var(--ease-md3-standard);
+}
+.item:active,
+.reminder-item:active {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* ----- Modal entry/exit — fade + slight rise ------------------------------ */
+.pl-modal {
+  transition: background-color var(--dur-base) var(--ease-md3-standard);
+}
+.pl-modal-card {
+  transform: translateY(20px) scale(.97);
+  opacity: 0;
+  transition: transform var(--dur-medium) var(--ease-md3-emphasis),
+              opacity var(--dur-base) var(--ease-md3-standard);
+}
+.pl-modal.show .pl-modal-card {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+/* ----- Toast — uses spring easing for the slide-in ----------------------- */
+.pl-toast {
+  bottom: calc(80px + env(safe-area-inset-bottom)) !important;  /* clear of bottom nav */
+  transition: transform var(--dur-medium) var(--ease-md3-spring),
+              opacity var(--dur-base) var(--ease-md3-standard) !important;
+}
+
+/* ----- Tab badges (notification-dot style for future use) ----------------- */
+.tab .tab-badge {
+  position: absolute;
+  top: 10px; right: calc(50% - 16px);
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-md3-standard);
+}
+.tab[data-has-badge="1"] .tab-badge { opacity: 1; }
+
+/* ----- Reduced-motion respect (accessibility) ----------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .panel, .pl-modal-card, .tab .tab-icon, .btn, .card, .today-card, .fav-card,
+  .item, .pl-toast, input, select, textarea {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ----- Mobile-tighten: keep things scannable on a phone ------------------ */
+@media (max-width: 480px) {
+  .tab .tab-label { font-size: 10px; }
+  .tab .tab-icon  { font-size: 20px; }
+  header.hero h1 { font-size: 16px; }
+  main, #pl-main { padding-left: 14px !important; padding-right: 14px !important; }
+}
+
+/* ----- Tablet: bottom nav still appropriate but cap width ---------------- */
+@media (min-width: 720px) {
+  .tabs {
+    max-width: 600px;
+    left: 50% !important;
+    transform: translateX(-50%);
+    border-radius: 18px 18px 0 0;
+  }
+}
+
+/* =============================================================================
+ * Pachaka Lokam — Settings panel + greeting + app-bar gear icon (v2.3)
+ * ============================================================================= */
+
+/* App-bar gear icon — sits next to the region selector */
+.hero-icon-btn {
+  background: #f4f4f5;
+  border: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  font-size: 18px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-fast) var(--ease-md3-spring),
+              background-color var(--dur-base) var(--ease-md3-standard);
+}
+.hero-icon-btn:active { transform: scale(.92); background: #e8e8ea; }
+@media (hover: hover) {
+  .hero-icon-btn:hover { background: #e8e8ea; }
+}
+.hero-controls { display: flex; align-items: center; gap: 8px; }
+
+/* Today greeting line — appears above the date */
+.today-greeting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 4px;
+  /* Soft fade-in so the greeting feels personal, not abrupt */
+  animation: greet-rise .35s var(--ease-md3-emphasis) both;
+}
+.today-greeting .greet-icon { font-size: 22px; line-height: 1; }
+.today-greeting .greet-text { letter-spacing: .1px; }
+@keyframes greet-rise {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Settings panel layout — sectioned, MD3-style cards */
+.settings-section {
+  background: #fff;
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.settings-section h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--green);
+  letter-spacing: .1px;
+}
+.settings-section .hint {
+  margin: 4px 0 12px;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+}
+.settings-row:first-of-type { border-top: 0; padding-top: 4px; }
+.settings-label {
+  flex: 0 0 100px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #444;
+}
+.settings-row input[type="text"],
+.settings-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.settings-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-actions .btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+.settings-about {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #666;
+}
+.settings-about a {
+  color: var(--green);
+  text-decoration: none;
+}
+.settings-about a:hover { text-decoration: underline; }
+
+/* Tighten on small phones — labels stack above controls */
+@media (max-width: 380px) {
+  .settings-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .settings-label { flex: 0 0 auto; }
+}
+
+/* Onboarding — name input step styling */
+.onb-name-wrap {
+  margin: 16px 0 8px;
+}
+.onb-name-wrap input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 17px;
+  border: 2px solid #ecdfb5;
+  border-radius: 12px;
+  background: #fffdf7;
+  box-sizing: border-box;
+  transition: border-color var(--dur-base) var(--ease-md3-standard),
+              box-shadow var(--dur-base) var(--ease-md3-standard);
+}
+.onb-name-wrap input:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(31, 163, 74, 0.15);
+}

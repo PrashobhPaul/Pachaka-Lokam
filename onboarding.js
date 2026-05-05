@@ -54,7 +54,7 @@ const Onboarding = {
     document.getElementById("onb-skip-all").onclick = () => this.finish(true);
     document.getElementById("onb-back").onclick = () => this.go(this.step - 1);
     document.getElementById("onb-next").onclick = () => {
-      if (this.step >= 5) this.finish(false);
+      if (this.step >= 6) this.finish(false);
       else this.go(this.step + 1);
     };
   },
@@ -67,7 +67,7 @@ const Onboarding = {
   },
 
   go(n) {
-    this.step = Math.max(1, Math.min(5, n));
+    this.step = Math.max(1, Math.min(6, n));
     this.renderStep();
   },
 
@@ -76,14 +76,39 @@ const Onboarding = {
     const bar  = document.getElementById("onb-bar");
     const back = document.getElementById("onb-back");
     const next = document.getElementById("onb-next");
-    bar.style.width = (this.step * 20) + "%";
+    bar.style.width = Math.round((this.step / 6) * 100) + "%";
     back.style.visibility = this.step === 1 ? "hidden" : "visible";
-    next.textContent = this.step === 5 ? "Done ✓" : "Next →";
+    next.textContent = this.step === 6 ? "Done ✓" : "Next →";
 
     const s = Store.state.settings;
     const vr = Store.state.vegRestrictions ||= { days: [], months: [] };
 
     if (this.step === 1) {
+      // === NEW Step 1 — Name capture ===
+      // Friendly, optional. We greet by name on Today if provided. Skipping
+      // is fine; falls through to a generic "Good morning" greeting.
+      const currentName = (s.userName || "").trim();
+      body.innerHTML = `
+        <h4>Hi! What should we call you?</h4>
+        <p class="hint">We'll greet you on the home tab — that's all. Stays only on this device, never shared.</p>
+        <div class="onb-name-wrap">
+          <input type="text" id="onb-name-input" maxlength="40"
+                 placeholder="e.g. Anu" autocomplete="given-name"
+                 value="${currentName.replace(/"/g,'&quot;')}" />
+          <p class="pl-mini" style="margin-top:6px">Leave blank if you'd rather not — you can add it later from Settings.</p>
+        </div>`;
+      const input = document.getElementById("onb-name-input");
+      const persist = () => {
+        Store.state.settings.userName = (input.value || "").trim().slice(0, 40);
+        Store.save();
+      };
+      input.addEventListener("input", persist);
+      // Auto-focus so the keyboard pops on mobile.
+      setTimeout(() => input.focus(), 80);
+    }
+
+    else if (this.step === 2) {
+      // === Region (was Step 1) ===
       body.innerHTML = `
         <h4>Where do you cook?</h4>
         <p class="hint">Pick your region — meal suggestions and festival calendar follow this.</p>
@@ -102,7 +127,7 @@ const Onboarding = {
       });
     }
 
-    else if (this.step === 2) {
+    else if (this.step === 3) {
       body.innerHTML = `
         <h4>What does your kitchen cook?</h4>
         <p class="hint">We'll bias suggestions to match. You can change this anytime.</p>
@@ -131,7 +156,7 @@ const Onboarding = {
       });
     }
 
-    else if (this.step === 3) {
+    else if (this.step === 4) {
       body.innerHTML = `
         <h4>Festival meals</h4>
         <p class="hint">When a festival is active, we can replace your meal plan with the traditional menu, just suggest it, or stay quiet.</p>
@@ -171,7 +196,7 @@ const Onboarding = {
       });
     }
 
-    else if (this.step === 4) {
+    else if (this.step === 5) {
       const sv = Store.state.settings.services ||= { maid: true, milk: true, newspaper: true, gas: true };
       body.innerHTML = `
         <h4>What do you track?</h4>
@@ -201,7 +226,7 @@ const Onboarding = {
       });
     }
 
-    else if (this.step === 5) {
+    else if (this.step === 6) {
       const stocked = new Set(Store.state.items.filter(i => i.qty > 0).map(i => i.name));
       body.innerHTML = `
         <h4>Quick stock — what's in your kitchen right now?</h4>
